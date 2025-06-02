@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg17
     container_name: chatwoot_postgres
     restart: always
     environment:
