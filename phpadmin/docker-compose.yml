@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+  phpipam-cron:
+    container_name: phpipam-cron
+    environment:
+      - TZ=Asia/Taipei
+      - IPAM_DATABASE_HOST=${IPAM_DATABASE_HOST}
+      - IPAM_DATABASE_USER=${IPAM_DATABASE_USER}
+      - IPAM_DATABASE_PASS=${IPAM_DATABASE_PASS}
+      - IPAM_DISABLE_INSTALLER=1
+      - SCAN_INTERVAL=5m
+    image: phpipam/phpipam-cron:latest
+    restart: always
+    volumes:
+      - phpipam-ca:/usr/local/share/ca-certificates:ro
+  phpipam-web:
+    container_name: phpipam-www
+    environment:
+      - TZ=Asia/Taipei
+      - IPAM_DATABASE_HOST=${IPAM_DATABASE_HOST}
+      - IPAM_DATABASE_USER=${IPAM_DATABASE_USER}
+      - IPAM_DATABASE_PASS=${IPAM_DATABASE_PASS}
+      - IPAM_DISABLE_INSTALLER=1
+    image: phpipam/phpipam-www:latest
+    ports:
+      - '15000:80'
+    restart: always
+    volumes:
+      - phpipam-logo:/phpipam/css/images/logo
+      - phpipam-ca:/usr/local/share/ca-certificates:ro
+  watchtower:
+    command: '--cleanup --schedule "0 3 * * *"'
+    container_name: watchtower
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+volumes:
+  phpipam-ca: Null
+  phpipam-logo: Null

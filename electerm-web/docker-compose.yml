@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  electerm-web:
+    image: https://docker.xuanyuan.me/zxdong262/electerm-web:latest
+    container_name: electerm-web
+    volumes:
+      - ./electerm-web_data:/home/electerm/data
+    environment:
+      - DB_PATH=/home/electerm/data
+      - HOST=0.0.0.0
+      - SERVER_SECRET=${SERVER_SECRET}
+      - SERVER_PASS=${SERVER_PASS}
+      - ENABLE_AUTH=1
+    ports:
+      - "8082:5577"
+    init: true
