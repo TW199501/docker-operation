@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:11.7
+    container_name: mariadb_server
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      
+    volumes:
+      - ./data:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d
+    networks:
+      - mariadb_net
+
+networks:
+  mariadb_net:
+    driver: bridge
