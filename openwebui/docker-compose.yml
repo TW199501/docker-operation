@@ -1,19 +1,106 @@
 version: '3.8'
-
 services:
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: openwebui
+    env_file:
+      - .env
     ports:
-      - "11688:8080"
+      - "3000:8080"
     volumes:
-      - ./openwebui_data:/app/backend/data
-    environment:
-      - ADMIN_EMAIL=${ADMIN_EMAIL}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ./openwebui-data:/app/backend/data
     restart: always
 
 volumes:
-  openwebui_data:
+  openwebui-data:
+
+
+ version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: pgvector
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Taipei
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openwebui
+    env_file:
+      - .env
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./openwebui-data:/app/backend/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+networks:
+  default:
+    name: openwebui_net
+ 
+
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: pgvector
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Taipei
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+    command: redis-server --appendonly yes
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openwebui
+    env_file:
+      - .env
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./openwebui-data:/app/backend/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: always
+
+networks:
+  default:
+    name: openwebui_net
