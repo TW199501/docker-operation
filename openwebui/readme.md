@@ -20,6 +20,12 @@ Environment="OLLAMA_HOST=0.0.0.0:11434"
 LimitNOFILE=65535
 Environment="OLLAMA_NUM_GPU_LAYERS=100"
 Environment="CUDA_VISIBLE_DEVICES=0,1,2,3"
+Environment="OLLAMA_SCHED_SPREAD=1"
+Environment="OLLAMA_KEEP_ALIVE=-1"
+Environment="OLLAMA_NUM_PARALLEL=4"
+Environment="OLLAMA_MAX_LOADED_MODELS=2"
+Environment="OLLAMA_HOST=0.0.0.0"
+
 
 [Install]
 WantedBy=default.target
