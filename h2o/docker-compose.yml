@@ -1,0 +1,18 @@
+services:
+  h2oai:
+    container_name: h2oai
+    image: 'gcr.io/vorvan/h2oai/h2o-llmstudio:nightly'
+    environment:
+      - TZ= Asia/Taipei
+    volumes:
+      - '~/.cache:/home/llmstudio/.cache'
+      - '`pwd`/llmstudio_mnt:/home/llmstudio/mount'
+    ports:
+      - '10101:10101'
+    tty: true
+    stdin_open: true
+    init: true
+    shm_size: 64g
+    runtime: nvidia
+
+
