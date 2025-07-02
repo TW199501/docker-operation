@@ -1,0 +1,50 @@
+FROM codercom/code-server:latest
+
+# 安裝指定的 VSCode 插件
+RUN code-server --install-extension ms-python.python \
+ && code-server --install-extension esbenp.prettier-vscode \
+ && code-server --install-extension dbaeumer.vscode-eslint \
+ && code-server --install-extension eamodio.gitlens \
+ && code-server --install-extension ms-azuretools.vscode-docker \
+ && code-server --install-extension shd101wyy.markdown-preview-enhanced \
+ && code-server --install-extension humao.rest-client \
+ && code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hant \
+ && code-server --install-extension ms-vscode.cpptools \
+ && code-server --install-extension ms-toolsai.jupyter \
+ $$ code-server --install-extension lightyen.vscode-fanhuaji \
+ $$ code-server --install-extension codeium.codeium
+
+
+# 建立預設設定資料夾
+RUN mkdir -p /home/coder/.local/share/code-server/User
+
+# 安裝字體依賴
+RUN apt update && apt install -y wget unzip fontconfig
+
+# 下載 Maple Mono NF CN Nerd Font 字體
+RUN mkdir -p /usr/share/fonts/maple && \
+    wget -O /tmp/maple.zip https://github.com/subframe7536/Maple-font/releases/download/v6.4/MapleMono-NF-CN.zip && \
+    unzip /tmp/maple.zip -d /usr/share/fonts/maple && \
+    rm /tmp/maple.zip && \
+    fc-cache -fv
+
+# 寫入繁體中文與基本偏好設定
+RUN echo '\
+{\n\
+  "locale": "zh-hant",\n\
+  "workbench.colorTheme": "Default Dark+",\n\
+  "editor.fontFamily": "Maple Mono NF CN, Fira Code, monospace",\n\
+  "editor.fontLigatures": true,\n\
+  "editor.fontSize": 14,\n\
+  "editor.tabSize": 2,\n\
+  "editor.wordWrap": "on",\n\
+  "files.autoSave": "afterDelay",\n\
+  "terminal.integrated.fontFamily": "Maple Mono NF CN, monospace",\n\
+  "terminal.integrated.fontSize": 13\n\
+}' > /home/coder/.local/share/code-server/User/settings.json
+
+# 確保權限正確
+RUN chown -R coder:coder /home/coder/.local
+
+# 預設開啟資料夾，可依需求掛載覆蓋 /home/coder/project
+WORKDIR /home/coder/project

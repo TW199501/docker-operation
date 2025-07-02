@@ -9,7 +9,23 @@ services:
       - ./data:/app/data
     environment:
       - TZ=Asia/Taipei
-      - AUTHORIZATION=sk-xxx
+      - AUTHORIZATION=${AUTHORIZATION}
+    env_file: .env
+ 
+  chatshare:
+    image: ghcr.io/h88782481/chat-share:latest
+    container_name: chat-share
+    restart: unless-stopped
+    ports:
+      - '5100:5100'
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Taipei
+      - SECRET_KEY=${SECRET_KEY}
+      - AUTHORIZATION=${AUTHORIZATION}
+      - DOMAIN_CHATGPT=http://127.0.0.1:5005
+    env_file: .env
 
   watchtower:
     image: containrrr/watchtower
@@ -18,3 +34,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --cleanup --interval 300 chat2api
+
+networks:
+  default:
+    external: true
+    name: elfnet

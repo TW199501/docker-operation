@@ -1,0 +1,69 @@
+services:
+  eddie:
+    build:
+      context: ./docker/code-server
+      dockerfile: Dockerfile.plugins
+    image: code-server:zh-hant
+    container_name: code_eddie
+    restart: unless-stopped
+    environment:
+      - PASSWORD=eddie123
+    volumes:
+      - ./users/eddie:/home/coder/project
+    ports:
+      - "9001:8080"
+
+  bob:
+    image: code-server:zh-hant
+    container_name: code_bob
+    restart: unless-stopped
+    environment:
+      - PASSWORD=bob123
+    volumes:
+      - ./users/bob:/home/coder/project
+    ports:
+      - "9002:8080"
+
+  carol:
+    image: code-server:zh-hant
+    container_name: code_carol
+    restart: unless-stopped
+    environment:
+      - PASSWORD=carol123
+    volumes:
+      - ./users/carol:/home/coder/project
+    ports:
+      - "9003:8080"
+
+  david:
+    image: code-server:zh-hant
+    container_name: code_david
+    restart: unless-stopped
+    environment:
+      - PASSWORD=david123
+    volumes:
+      - ./users/david:/home/coder/project
+    ports:
+      - "9004:8080"
+
+  emily:
+    image: code-server:zh-hant
+    container_name: code_emily
+    restart: unless-stopped
+    environment:
+      - PASSWORD=emily123
+    volumes:
+      - ./users/emily:/home/coder/project
+    ports:
+      - "9005:8080"
+
+  frank:
+    image: code-server:zh-hant
+    container_name: code_frank
+    restart: unless-stopped
+    environment:
+      - PASSWORD=frank123
+    volumes:
+      - ./users/frank:/home/coder/project
+    ports:
+      - "9006:8080"
