@@ -1,9 +1,10 @@
+version: '3'
+
 services:
   eddie:
     build:
-      context: ./docker/code-server
-      dockerfile: Dockerfile.plugins
-    image: code-server:zh-hant
+      context: .
+      dockerfile: Dockerfile
     container_name: code_eddie
     restart: unless-stopped
     environment:
@@ -14,7 +15,9 @@ services:
       - "9001:8080"
 
   bob:
-    image: code-server:zh-hant
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: code_bob
     restart: unless-stopped
     environment:

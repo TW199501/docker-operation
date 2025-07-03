@@ -1,3 +1,6 @@
-# Local .env files
+# 版本管理
+/VERSION
+
+# 其他忽略規則Local .env files
 .env
 !.env.example

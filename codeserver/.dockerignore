@@ -1,0 +1,23 @@
+# 忽略所有文件
+*
+
+# 只包含必要的文件
+!Dockerfile
+!docker-compose.yml
+!extensions.txt
+!VERSION
+
+# 忽略特定類型的文件
+**/*.md
+**/.git
+**/.gitignore
+**/.DS_Store
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.env
+**/.vscode
+**/*.log
+**/*.tmp
