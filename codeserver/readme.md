@@ -61,10 +61,8 @@ https://dev.yourdomain.com/bob
 
 ```
 project-root/
+├── Dockerfile
 ├── docker-compose.yml
-├── docker/
-│   └── code-server/
-│       └── Dockerfile.plugins
 ├── users/
 │   ├── eddie/
 │   └── bob/

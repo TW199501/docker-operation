@@ -1,7 +1,10 @@
+# 使用官方 code-server 鏡像
 FROM codercom/code-server:latest
 
-# 安裝基本依賴
+# 設置 USER 為 root 進行安裝
 USER root
+
+# 安裝基本依賴
 RUN apt-get update && apt-get install -y \
     wget \
     unzip \
@@ -12,45 +15,44 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     build-essential \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
+
+# 安裝 Node.js 和 npm
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && node --version \
+    && npm --version
+
+# 創建必要的目錄
+RUN mkdir -p /app \
+    && mkdir -p /home/coder/.local/share/code-server/extensions
+
+# 複製所有文件到 /app
+COPY . /app/
+
+# 設置工作目錄
+WORKDIR /app
+
+# 設置腳本權限
+RUN chmod +x /app/start-code-server.sh /app/install-extensions.sh \
+    && chown -R coder:coder /app
+
+# 建立預設設定資料夾並設置權限
+RUN mkdir -p /home/coder/.local/share/code-server/User \
+    && chown -R coder:coder /home/coder/.local
 
 # 設置環境變量
 ENV SHELL=/bin/bash \
     PATH="/home/coder/.local/bin:${PATH}" \
-    # 避免 npm 安裝時的權限問題
     NPM_CONFIG_PREFIX=/home/coder/.npm-global \
     PATH="/home/coder/.npm-global/bin:${PATH}" \
-    # 跳過擴展安裝確認
     VSCODE_CLI=1 \
     EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery"}' \
-    # 自動信任所有擴展
     VSCODE_CLI_EXTRA_ARGS="--install-extension"
 
-# 創建必要的目錄並設置權限
-RUN mkdir -p /home/coder/.local/share/code-server/extensions \
-    && chown -R coder:coder /home/coder
-
-# 切換到 coder 用戶
-USER coder
-
-# 安裝 Node.js 和 npm
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - \
-    && sudo apt-get install -y nodejs \
-    && node --version \
-    && npm --version
-
-# 複製擴展列表文件
-COPY extensions.txt /tmp/extensions.txt
-
 # 安裝擴展
-RUN cat /tmp/extensions.txt | grep -v '^#' | grep -v '^$' | while read extension; do \
-    echo "Installing $extension..." && \
-    code-server --install-extension "$extension" || echo "Failed to install $extension"; \
-    done && \
-    rm /tmp/extensions.txt
-
-# 切換回 root 用戶進行系統設置
-USER root
+RUN /app/install-extensions.sh
 
 # 下載並安裝 Maple 主題
 RUN mkdir -p /tmp/maple-theme \
@@ -72,9 +74,6 @@ RUN mkdir -p /usr/share/fonts/maple && \
 RUN mkdir -p /home/coder/.local/share/code-server/User && \
     chown -R coder:coder /home/coder/.local
 
-# 切換回 coder 用戶
-USER coder
-
 # 寫入繁體中文與基本偏好設定
 RUN mkdir -p /home/coder/.local/share/code-server/User && \
     echo '\
@@ -94,5 +93,5 @@ RUN mkdir -p /home/coder/.local/share/code-server/User && \
 # 確保權限正確
 RUN chown -R coder:coder /home/coder/.local
 
-# 預設開啟資料夾，可依需求掛載覆蓋 /home/coder/project
-WORKDIR /home/coder/project
+# 設置啟動命令
+CMD ["/app/start-code-server.sh"]

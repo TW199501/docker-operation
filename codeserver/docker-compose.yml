@@ -1,72 +1,69 @@
-version: '3'
-
 services:
   eddie:
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: code_eddie
+    image: codeserver:latest
     restart: unless-stopped
     environment:
-      - PASSWORD=eddie123
+      PASSWORD: eddie123
     volumes:
       - ./users/eddie:/home/coder/project
     ports:
       - "9001:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
 
   bob:
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: code_bob
+    image: codeserver:latest
     restart: unless-stopped
     environment:
-      - PASSWORD=bob123
+      PASSWORD: bob123
     volumes:
       - ./users/bob:/home/coder/project
     ports:
       - "9002:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
 
   carol:
-    image: code-server:zh-hant
     container_name: code_carol
+    image: codeserver:latest
     restart: unless-stopped
     environment:
-      - PASSWORD=carol123
+      PASSWORD: carol123
     volumes:
       - ./users/carol:/home/coder/project
     ports:
       - "9003:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
 
   david:
-    image: code-server:zh-hant
     container_name: code_david
+    image: codeserver:latest
     restart: unless-stopped
     environment:
-      - PASSWORD=david123
+      PASSWORD: david123
     volumes:
       - ./users/david:/home/coder/project
     ports:
       - "9004:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
 
-  emily:
-    image: code-server:zh-hant
-    container_name: code_emily
-    restart: unless-stopped
-    environment:
-      - PASSWORD=emily123
-    volumes:
-      - ./users/emily:/home/coder/project
-    ports:
-      - "9005:8080"
-
-  frank:
-    image: code-server:zh-hant
-    container_name: code_frank
-    restart: unless-stopped
-    environment:
-      - PASSWORD=frank123
-    volumes:
-      - ./users/frank:/home/coder/project
-    ports:
-      - "9006:8080"
+networks:
+  default:
+    name: code_network
+    driver: bridge
