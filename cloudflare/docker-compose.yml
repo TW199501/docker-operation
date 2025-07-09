@@ -1,0 +1,43 @@
+services:
+
+  # Cloudflare Tunnel Service
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest              # 拉取最新版本的 Cloudflare Tunnel 映像
+    container_name: cloudflare-tunnel                 # Cloudflare Tunnel 容器的名稱
+    hostname: cloudflare-tunnel                       # Cloudflare Tunnel 容器的主機名稱
+
+    restart: unless-stopped                           # 除非手動停止，否則重新啟動容器
+
+    # Cloudflare Tunnel 容器的日誌記錄設定
+    logging:
+      driver: "json-file"                             # 使用預設的 json-file 日誌記錄驅動程式
+      options:
+        max-size: "100m"                              # 輪替前的最大日誌檔案大小 (100 MB)
+        max-file: "10"                                # 要保留的最大日誌檔案數量 (10)
+
+    # 網路模式設定
+    network_mode: "host"                              # 使用主機網路 (主機和容器之間沒有隔離)
+
+    # 執行 Cloudflare Tunnel 的命令
+    command: tunnel run                               # 啟動 Cloudflare tunnel 的命令
+
+    # 用於時間同步和 hosts 檔案持久化的磁碟區設定
+    volumes:
+      - /etc/localtime:/etc/localtime:ro              # 與主機同步時間
+      - ./config/hosts:/etc/hosts                     # 將 hosts 檔案從主機掛載到容器
+
+    # Cloudflare Tunnel 的環境變數
+    environment:
+      - "TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}"     # 從環境變數傳遞 Cloudflare Tunnel 權杖
+
+    # 用於驗證 Cloudflare Tunnel 是否準備就緒的健康檢查設定
+    healthcheck:
+      test: ["CMD", "cloudflared", "--version"]       # 檢查 cloudflared version 命令是否正常運作
+      interval: 30s                                   # 健康檢查嘗試之間的間隔時間
+      timeout: 10s                                    # 等待回應的時間
+      retries: 3                                      # 標記為不健康之前的重試次數
+      start_period: 10s                               # 健康檢查開始前的延遲時間
+
+    # 用於附加元資料的容器標籤
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"  # 使用 Watchtower 啟用自動更新
