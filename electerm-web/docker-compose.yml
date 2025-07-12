@@ -11,7 +11,7 @@ services:
     image: zxdong262/electerm-web:latest
     init: True
     ports:
-      - '18082:5577'
+      - '18080:5577'
     volumes:
       - /mnt/Storage/app/electerm-web:/home/electerm/data
     restart: unless-stopped
