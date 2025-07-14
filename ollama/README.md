@@ -38,3 +38,32 @@
 
 ---
 
+CUDA_VISIBLE_DEVICES: 
+GPU_DEVICE_ORDINAL:0,1,2,3,4,5 
+HIP_VISIBLE_DEVICES: 
+HSA_OVERRIDE_GFX_VERSION: 
+HTTPS_PROXY: 
+HTTP_PROXY: 
+NO_PROXY:
+OLLAMA_CONTEXT_LENGTH:4096 
+OLLAMA_DEBUG:INFO 
+OLLAMA_FLASH_ATTENTION:true 
+OLLAMA_GPU_OVERHEAD:10 
+OLLAMA_HOST:http://0.0.0.0:11434 
+OLLAMA_INTEL_GPU:false 
+OLLAMA_KEEP_ALIVE:1h0m0s 
+OLLAMA_KV_CACHE_TYPE: 
+OLLAMA_LLM_LIBRARY:cuda 
+OLLAMA_LOAD_TIMEOUT:20m0s 
+OLLAMA_MAX_LOADED_MODELS:2 
+OLLAMA_MAX_QUEUE:1024 
+OLLAMA_MODELS:/models 
+OLLAMA_MULTIUSER_CACHE:false 
+OLLAMA_NEW_ENGINE:false 
+OLLAMA_NOHISTORY:false 
+OLLAMA_NOPRUNE:false 
+OLLAMA_NUM_PARALLEL:1 
+OLLAMA_ORIGINS:[* http://localhost https://localhost http://localhost:* https://localhost:* http://127.0.0.1 https://127.0.0.1 http://127.0.0.1:* https://127.0.0.1:* http://0.0.0.0 https://0.0.0.0 http://0.0.0.0:* https://0.0.0.0:* app://* file://* tauri://* vscode-webview://* vscode-file://*] 
+OLLAMA_SCHED_SPREAD:true 
+ROCR_VISIBLE_DEVICES: 
+http_proxy: https_proxy: no_proxy:]"
