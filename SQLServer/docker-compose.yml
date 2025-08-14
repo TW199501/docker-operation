@@ -5,19 +5,16 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql2022-dev
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Developer
+      - ACCEPT_EULA= Y
+      - MSSQL_SA_PASSWORD= ${MSSQL_SA_PASSWORD}
+      - MSSQL_PID= Developer
     ports:
       - "1433:1433"
     volumes:
-      - ./sql_data:/var/opt/mssql
-    restart: always
+      - /mnt/Storage/app/mssql/sql_data:/var/opt/mssql
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${MSSQL_SA_PASSWORD}", "-Q", "SELECT 1" ]
       interval: 10s
       timeout: 5s
       retries: 10
-
-volumes:
-  sql_data:

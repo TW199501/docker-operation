@@ -1,0 +1,47 @@
+name: digirunner-open-source
+services:
+    dgr:
+        image: tpisoftwareopensource/digirunner-open-source
+        ports:
+            - "31080:18080"
+        environment:
+            - TZ=Asia/Taipei
+
+services:
+  dgr-h2db-detect:
+    container_name: dgr-h2db-detect
+    image: bash
+    volumes:
+      - /mnt/storage/app/digirunner/db:/opt/db
+      - shared:/opt/shared
+    command:
+      bash -c '
+      cat << EOF > /opt/shared/dgr.args
+      -Xms2g
+      -Xmx4g
+      -DdigiRunner.token.key-store.path=/opt/digirunner/keys
+      -Dserver.port=18080
+      -Dspring.datasource.url=jdbc:h2:/opt/digirunner/db/dgrdb;NON_KEYWORDS=VALUE;Mode=MySQL
+      EOF
+      ls /opt/db/*.db &> /dev/null && echo "-Dspring.sql.init.mode=never" >> /opt/shared/dgr.args || echo "-Dspring.sql.init.mode=always" >> /opt/shared/dgr.args;
+      cat /opt/shared/dgr.args
+      '
+
+  dgr:
+    image: tpisoftwareopensource/digirunner-open-source
+    container_name: dgr-gateway
+    depends_on:
+      dgr-h2db-detect:
+        condition: service_completed_successfully
+    ports:
+      - "31080:18080"
+    environment:
+      - TZ=Asia/Taipei
+    command:
+      - "@/opt/shared/dgr.args"
+      - "org.springframework.boot.loader.launch.PropertiesLauncher"
+    volumes:
+      - /mnt/storage/app/digirunner/db:/opt/digirunner/db
+      - shared:/opt/shared
+
+
