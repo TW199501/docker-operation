@@ -1,0 +1,17 @@
+{
+    "dotnet.codeLens.enableReferencesCodeLens": false,
+    "dart.showSkippedTests": false,
+    "dotnet.codeLens.enableTestsCodeLens": false,
+    "editor.inlineSuggest.edits.allowCodeShifting": "never",
+    "editor.suggest.showInlineDetails": false,
+    "codingcopilot.enableAutoCompletions": false,
+    "continue.showInlineTip": false,
+    "editor.inlineSuggest.syntaxHighlightingEnabled": false,
+    "editor.screenReaderAnnounceInlineSuggestion": false,
+    "editor.inlineSuggest.fontFamily": "",
+    "editor.inlineSuggest.enabled": false,
+    "java.inlayHints.parameterNames.enabled": "none",
+    "javascript.inlayHints.parameterNames.suppressWhenArgumentMatchesName": false,
+    "javascript.inlayHints.variableTypes.suppressWhenTypeMatchesName": false,
+    "typescript.inlayHints.variableTypes.suppressWhenTypeMatchesName": false
+}
