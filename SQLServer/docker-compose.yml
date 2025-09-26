@@ -8,6 +8,7 @@ services:
       - ACCEPT_EULA= Y
       - MSSQL_SA_PASSWORD= ${MSSQL_SA_PASSWORD}
       - MSSQL_PID= Developer
+      - TZ=Asia/Taipei
     ports:
       - "1433:1433"
     volumes:

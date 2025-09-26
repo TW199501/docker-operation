@@ -1,34 +1,32 @@
 services:
   gitea:
-    image: docker.gitea.com/gitea/gitea:1.24.5
     container_name: gitea
+    image: docker.gitea.com/gitea:1.24.5-rootless
     restart: unless-stopped
     ports:
       - "3000:3000"   # Web
-      - "2222:22"     # SSH Git
+      - "2222:2222"     # SSH Git
     environment:
       - USER_UID=${USER_UID}
       - USER_GID=${USER_GID}
       - TZ=Asia/Taipei
-
       # --- Database (MSSQL) ---
-      - DB_TYPE=${DB_TYPE}
-      - DB_HOST=${DB_HOST}:${DB_PORT}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWD=${DB_PASSWD}
-
+      - GITEA__database__DB_TYPE=${DB_TYPE}
+      - GITEA__database__DB_HOST=${DB_HOST}:${DB_PORT}
+      - GITEA__database__DB_NAME=${DB_NAME}
+      - GITEA__database__DB_USER=${DB_USER}
+      - GITEA__database__DB_PASSWD=${DB_PASSWD}
       # --- Server / URLs ---
-      - ROOT_URL=${ROOT_URL}
+      - GITEA__server__ROOT_URL=${ROOT_URL}
       - DOMAIN=${DOMAIN}
-      - SSH_DOMAIN=${SSH_DOMAIN:-$DOMAIN}
+      - SSH_DOMAIN=${SSH_DOMAIN}
       - LFS_START_SERVER=true
       - PROXY_FROM_X_FORWARDED_HEADERS=true
-
       # 初次安裝後請改為 true 再重啟
       - INSTALL_LOCK=false
 
     volumes:
-      - ./gitea:/data
+      - ./data:/var/lib/gitea
+      - ./config:/etc/gitea
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
