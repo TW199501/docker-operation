@@ -208,4 +208,77 @@ sudo kvm-ok                          # 檢查 kvm 支援狀況
 
 ---
 
-希望這份手冊能幫助你順利使用 Windows in Docker！如果有其他問題，歡迎前往 [GitHub](https://github.com/dockur/windows) 查詢。
+### 完整環境變量與參數的 `docker-compose.yml` 文件，並附上註解：
+
+```yaml
+version: '3.8'
+
+services:
+  windows:
+    image: dockurr/windows
+    container_name: windows
+    environment:
+      VERSION: "11"          # 指定 Windows 版本（預設為 Windows 11 Pro）
+      USERNAME: "Docker"     # 自訂用戶名（預設為 Docker）
+      PASSWORD: "admin"       # 自訂密碼（預設為 admin）
+      DISK_SIZE: "64G"        # 設定硬碟容量（預設為 64 GB）
+      RAM_SIZE: "4G"          # 設定記憶體大小（預設為 4 GB）
+      CPU_CORES: "2"          # 設定核心數（預設為 2 核心）
+      DHCP: "Y"               # 啟用dhcp（預設啟用dhcp）
+    devices:
+      - /dev/kvm             # 添加 KVM 硬體加速設備
+      - /dev/net/tun         # 添加網路_TUN 設備
+      - /dev/vhost-net       # 添加虛擬網路設備（用於dhcp）
+      - /dev/bus/usb        # 添加_usb 總線路徑（ uncomment 若要使用 USB 裝置）
+    cap_add:
+      - NET_ADMIN            # 授予網路管理權限
+    ports:
+      - 8006:8006           # 映射 Web 檢視器埠到主機的 8006 埠
+      - 3389:3389/tcp       # 映射 RDP 通訊埠（TCP）到主機的 3389 埠
+      - 3389:3389/udp       # 映射 RDP 通訊埠（UDP）到主機的 3389 埠
+    volumes:
+      - ./windows:/storage  # 指定儲存位置，將 "./windows" 挂載到容器的 /storage
+      - ./install.bat:/oem   # 如果有自訂安裝腳本，掛載到 C:\OEM（uncomment 若要使用）
+    restart: always          # 設定容器自動重啟
+    stop_grace_period: 2m    # 容器停止前等待時間（預設為 2 分鐘）
+    device_cgroup_rules:
+      - 'c *:* rwm'         # 設定設備權限（用於usb裝置）
+
+# 常見問題解答：
+# 若要使用 USB 裝置，請 uncomment 下列參數並根據需要修改：
+# environment:
+#   ARGUMENTS: "-device usb-host,vendorid=0x1234,productid=0x1234"  # 根據 lsusb 結果設定_usb裝置參數
+```
+
+### 說明：
+1. **環境變量**：  
+   - `VERSION`：指定 Windows 版本（如 "11" 表示 Windows 11 Pro）。  
+   - `USERNAME` 和 `PASSWORD`：自訂用戶名和密碼。  
+   - `DISK_SIZE`、`RAM_SIZE` 和 `CPU_CORES`：分別用於調整硬碟大小、記憶體大小和 CPU 核心數。  
+   - `DHCP`：啟用dhcp（預設為 "Y"）。
+
+2. **設備映射**：  
+   - `/dev/kvm` 和 `/dev/net/tun`：用於 KVM 硬體加速和網路配置。  
+   - `/dev/vhost-net`：用於dhcp配置。  
+   - `/dev/bus/usb`：用於 USB 裝置支持（ uncomment 若要使用）。
+
+3. **端口映射**：  
+   - `8006:8006`：Web 檢視器埠。  
+   - `3389:3389/tcp` 和 `3389:3389/udp`：RDP 通訊埠（TCP 和 UDP）。
+
+4. **卷宗掛載**：  
+   - `./windows:/storage`：指定儲存位置。  
+   - `./install.bat:/oem`：如果需要執行自訂安裝腳本，將腳本掛載到 C:\OEM。
+
+5. **其他參數**：  
+   - `restart: always`：設定容器自動重啟（預設為 "always"）。  
+   - `stop_grace_period: 2m`：容器停止前等待時間（預設為 2 分鐘）。  
+   - `device_cgroup_rules`：用於usb裝置支持。
+
+### 使用方法：
+1. 創建一個名為 `docker-compose.yml` 的文件，並複製上述內容。
+2. 在終端機中執行以下命令啟動容器：
+   ```bash
+   docker-compose up --build
+   ```
+3. 安裝完成后，可以通过瀏覽器連線至 `http://127.0.0.1:8006` 查看安裝進度，或使用 RDP 連線到 `localhost`（帳戶名稱為 `Docker`，密碼為 `admin`）。

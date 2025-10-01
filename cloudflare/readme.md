@@ -1,60 +1,60 @@
-Container Cloudflare Tunnel
-A Docker Compose container setup for a Cloudflare Tunnel. This setup allows you to securely expose a local service to the internet using Cloudflare's infrastructure.
+貨櫃Cloudflare隧道
+Docker為Cloudflare隧道組成貨櫃設置。此設置使您可以使用CloudFlare的基礎架構安全地將本地服務曝光到Internet。
 
-Table of Contents
-Introduction
-Cloudflare Tunnel provides a secure way to expose a web server running on your local network to the public internet. This can be particularly useful for development, accessing internal services remotely, or securely publishing a service without opening ports on your router. The container in this project sets up a Cloudflare Tunnel, making it simple to deploy.
+目錄
+介紹
+CloudFlare隧道提供了一種安全的方法，可以將在本地網路上運行的Web伺服器公開到公共Internet上。這對於開發，遠端存取內部服務或安全地發布服務可能特別有用，而無需在路由器上打開埠。該項目中的容器設置了Cloudflare隧道，使其易於部署。
 
-Setup
-Requirements
+設置
+要求
 Docker
-Docker Compose
-This setup assumes that Cloudflare is the DNS provider for your domain.
+Docker組成
+該設置假定CloudFlare是您域的DNS提供商。
 
-Environment Variables
-Add the missing information for the environment variables in the .env file:
+環境變數
+在.env文件中添加環境變數的遺失資訊：
 
-CLOUDFLARE_TUNNEL_TOKEN=''
-CLOUDFLARE_TUNNEL_TOKEN: This token is provided by Cloudflare when you create a new tunnel. Replace '' with your actual token.
-How to Obtain the Cloudflare Tunnel Token
-To get the Cloudflare Tunnel token, follow these steps:
+cloudflare_tunnel_token =''
+CloudFlare_Tunnel_Token：創建新隧道時，CloudFlare提供了這個令牌。用實際的令牌替換。
+如何獲得Cloudflare隧道令牌
+要獲得Cloudflare隧道令牌，請按照以下步驟：
 
-Log in to your Cloudflare Dashboard.
-Navigate to the Zero Trust section or Access section (depending on the Cloudflare interface).
-Select Tunnels from the navigation menu.
-Click on Create a Tunnel.
-Follow the on-screen instructions to name your tunnel and select your desired configuration.
-Once the tunnel is created, Cloudflare will provide a Tunnel Token. Copy this token and paste it into the .env file under CLOUDFLARE_TUNNEL_TOKEN.
-Make sure to edit the .env file and add your specific token:
+登錄到您的Cloudflare儀錶板。
+導航到零信任部分或訪問部分（取決於Cloudflare介面）。
+從“導航”菜單中選擇隧道。
+單擊創建隧道。
+請按照螢幕上的說明命名隧道並選擇所需的配置。
+創建隧道後，CloudFlare將提供隧道令牌。複製此令牌並將其黏貼到Cloudflare_tunnel_token下的.env文件中。
+確保編輯.env文件並添加您的特定令牌：
 
-nano .env
-To prevent .env from being tracked by version control, run the following command:
+奈米.env
+為防止.env通過版本控制跟蹤，請運行以下命令：
 
-git update-index --assume-unchanged .env
-Hosts Configuration
-Modify the hosts file if needed to define any custom hostname mappings:
+git Update-index - Assume-Hunganged .ENV
+主機配置
+如果需要，修改主機文件以定義任何自訂主機名映射：
 
-nano config/hosts
-Add any additional hosts that need to be mapped within the container. To avoid tracking changes to this file, run:
+Nano Config/Hosts
+添加需要在容器中映射的任何其他主機。為避免跟蹤此文件的更改，請運行：
 
-git update-index --assume-unchanged config/hosts
+git Updation-index - Assume Hinganged Config/Hosts
 
-Usage
-Starting the Container
-To start the Cloudflare Tunnel container, run:
+用法
+啟動容器
+要啟動Cloudflare隧道容器，請運行：
 
-docker compose up -d
-This command will start the container in detached mode.
+Docker組成-D
+此命令將在獨立模式下啟動容器。
 
-Stopping the Container
-To stop the running container, use:
+停止容器
+要停止運行容器，請使用：
 
-docker compose down
-Viewing Logs
-To view the logs for the running container, which can help with troubleshooting:
+Docker構成
+查看日誌
+要查看運行容器的日誌，這可以幫助解決故障排除：
 
-docker logs cloudflare-tunnel
-Cleanup
-If you want to remove all containers, networks, and associated volumes:
+Docker記錄Cloudflare-Tunnel
+清理
+如果要刪除所有容器，網路和相關卷：
 
-docker compose down --volumes --remove-orphans
+Docker撰寫 - volumes-槍手孔
