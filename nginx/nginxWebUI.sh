@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 INSTALL_DIR="/home/nginxWebUI"
 SERVICE_NAME="nginxWebUI"
@@ -10,10 +10,41 @@ JAR_PATH="$INSTALL_DIR/$JAR_NAME"
 SYSTEMD_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 JDK_PATH="/usr/bin/java"
 
-echo "安裝 OpenJDK 11..."
-sudo apt update
-sudo apt install -y openjdk-11-jdk wget unzip curl
+# 存檔：install_java.sh；執行：sudo bash install_java.sh
+#!/usr/bin/env bash
+set -euo pipefail
 
+echo "[1/3] 安裝常用工具"
+sudo apt-get update
+sudo apt-get install -y wget unzip curl gnupg
+
+echo "[2/3] 嘗試安裝 openjdk-11-jdk（官方庫）"
+if apt-cache show openjdk-11-jdk >/dev/null 2>&1; then
+  sudo apt-get install -y openjdk-11-jdk
+else
+  echo "[2b] 官方庫沒有 11，用 Adoptium（Temurin 11）"
+  sudo mkdir -p /etc/apt/keyrings
+  curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public \
+    | sudo tee /etc/apt/keyrings/adoptium.asc >/dev/null
+
+  . /etc/os-release
+  CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+
+  echo "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb ${CODENAME} main" \
+    | sudo tee /etc/apt/sources.list.d/adoptium.list >/dev/null
+
+  sudo apt-get update
+  if ! sudo apt-get install -y temurin-11-jdk; then
+    echo "[2c] Temurin 11 失敗，改裝 OpenJDK 17 作為備案"
+    sudo apt-get install -y openjdk-17-jdk
+  fi
+fi
+
+echo "[3/3] 驗證 Java"
+JAVA_BIN="$(command -v java)"
+echo "java 路徑：$JAVA_BIN"
+"$JAVA_BIN" -version
+  
 echo "建立資料夾 $INSTALL_DIR"
 sudo mkdir -p "$INSTALL_DIR"
 sudo chown $USER:$USER "$INSTALL_DIR"

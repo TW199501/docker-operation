@@ -64,21 +64,59 @@ git clone --depth=1 https://github.com/openresty/headers-more-nginx-module.git "
 git clone --depth=1 https://github.com/FRiCKLE/ngx_cache_purge.git "$BUILD_DIR/ngx_cache_purge"
 git clone --depth=1 https://github.com/nginx/njs.git "$BUILD_DIR/njs"
 
-# === 檢查編譯相關依賴 ===
+# === 檢查並自動安裝編譯相關依賴（支援 apt/dnf/yum/apk）===
 echo "檢查編譯相關依賴..."
-if ! command -v gcc >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
-  echo "警告: 缺少必要的編譯工具 (gcc, make)"
-  echo "請手動安裝: sudo apt update && sudo apt install -y build-essential zlib1g-dev libssl-dev libmaxminddb-dev unzip git libpcre2-dev"
-  exit 1
+# 取得提升權限方式
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; else
+  if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else
+    echo "需要 root 權限或 sudo 才能自動安裝套件"; exit 1
+  fi
 fi
 
-# 檢查 PCRE / PCRE2 是否就緒（至少其一）
+need_install=0
+for bin in gcc make git; do
+  command -v "$bin" >/dev/null 2>&1 || need_install=1
+done
+
+# 若缺工具則嘗試依發行版自動安裝
+if [ "$need_install" -eq 1 ]; then
+  echo "偵測到缺少編譯工具，嘗試自動安裝..."
+  # apt (Debian/Ubuntu)
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    $SUDO apt-get update -yq
+    $SUDO apt-get install -yq build-essential zlib1g-dev libssl-dev libmaxminddb-dev unzip git libpcre2-dev libxml2-dev libxslt1-dev
+  # dnf (Rocky/Alma/Fedora)
+  elif command -v dnf >/dev/null 2>&1; then
+    $SUDO dnf -y groupinstall "Development Tools"
+    $SUDO dnf -y install pcre2-devel zlib-devel openssl-devel libmaxminddb-devel unzip git libxml2-devel libxslt-devel
+  # yum (舊版 RHEL/CentOS)
+  elif command -v yum >/dev/null 2>&1; then
+    $SUDO yum -y groupinstall "Development Tools"
+    $SUDO yum -y install pcre2-devel zlib-devel openssl-devel libmaxminddb-devel unzip git libxml2-devel libxslt-devel
+  # apk (Alpine)
+  elif command -v apk >/dev/null 2>&1; then
+    $SUDO apk add --no-cache build-base pcre2-dev zlib-dev openssl-dev libmaxminddb-dev unzip git
+    $SUDO apk add --no-cache build-base pcre2-dev zlib-dev openssl-dev libmaxminddb-dev unzip git libxml2-dev libxslt-dev
+  else
+    echo "無法判斷套件管理器，請手動安裝依賴。"
+    echo "必要套件：gcc make git（開發工具）、zlib 開發套件、OpenSSL 開發套件、libmaxminddb 開發套件、unzip、libpcre2 開發套件"
+    exit 1
+  fi
+fi
+
+# 二次驗證
+for bin in gcc make git; do
+  command -v "$bin" >/dev/null 2>&1 || { echo "安裝失敗：缺少 $bin"; exit 1; }
+done
+
+# 確認 PCRE2 就緒（或至少 PCRE v1）
 if command -v pcre2-config >/dev/null 2>&1; then
   echo "已偵測到 PCRE2（推薦）"
 elif command -v pcre-config >/dev/null 2>&1; then
   echo "已偵測到舊版 PCRE（可用，但建議改用 PCRE2）"
 else
-  echo "缺少 PCRE/PCRE2。建議：sudo apt install libpcre2-dev"
+  echo "缺少 PCRE/PCRE2 開發環境，請手動安裝 libpcre2-dev/pcre2-devel 或重跑本腳本。"
   exit 1
 fi
 echo "依賴檢查完成"
@@ -95,8 +133,31 @@ tar -xzf "openssl-$OPENSSL_VER.tar.gz"
 OPENSSL_DIR="$BUILD_DIR/openssl-$OPENSSL_VER"
 test -f "$OPENSSL_DIR/Configure" || { echo "OpenSSL 原始碼目錄不正確"; exit 1; }
 
+# === 檢查/建置 Brotli 庫 ===
+BROTLI_OUT="$BUILD_DIR/ngx_brotli/deps/brotli/out"
+if [ ! -f "$BROTLI_OUT/libbrotlienc.a" ] && [ ! -f /usr/lib/x86_64-linux-gnu/libbrotlienc.so ] && [ ! -f /usr/lib64/libbrotlienc.so ]; then
+  echo "未偵測到 Brotli 開發庫，嘗試建置子模組..."
+  git -C "$BUILD_DIR/ngx_brotli" submodule update --init --recursive || true
+  if command -v cmake >/dev/null 2>&1; then
+    mkdir -p "$BUILD_DIR/ngx_brotli/deps/brotli/out"
+    cmake -S "$BUILD_DIR/ngx_brotli/deps/brotli/c" -B "$BROTLI_OUT" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    cmake --build "$BROTLI_OUT" -j"$(nproc)"
+  else
+    # 沒有 cmake 就改裝系統套件（Debian/Ubuntu 做示例）
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get update -yq
+      sudo apt-get install -yq libbrotli-dev
+    elif command -v dnf >/dev/null 2>&1; then
+      sudo dnf install -y brotli-devel
+    elif command -v apk >/dev/null 2>&1; then
+      sudo apk add --no-cache brotli-dev
+    fi
+  fi
+fi
+
 # === 執行 configure 編譯 ===
 cd "$BUILD_DIR/nginx-${NGINX_VERSION}"
+make clean || true
 ./configure \
   --with-pcre="$BUILD_DIR/pcre2-10.44" \
   --with-pcre-jit \
@@ -135,6 +196,7 @@ cd "$BUILD_DIR/nginx-${NGINX_VERSION}"
   --with-http_v2_module \
   --with-openssl="$OPENSSL_DIR" \
   --with-http_v3_module \
+  --with-http_xslt_module \
   --with-mail=dynamic \
   --with-mail_ssl_module \
   --with-stream=dynamic \
