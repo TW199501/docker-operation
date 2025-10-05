@@ -1,0 +1,60 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+
+    # —— 非 Swarm 時，這兩個最關鍵 ——
+    runtime: nvidia
+    # 非 Swarm 的 CPU/記憶體限制（等同 docker run --cpus / --memory）
+    cpus: "${CPUS:-8.0}" # 依你需求改（例如 4.0、6.0、8.0）
+    mem_limit: "${MEM_LIMIT:-24g}" # 視主機而定
+
+    environment:
+      # —— Ollama 基本 ——
+      OLLAMA_LLM_LIBRARY: "cuda"
+      OLLAMA_MODELS: "/models"
+      OLLAMA_DEBUG: "false"
+      OLLAMA_KEEP_ALIVE: "5m0s"
+      OLLAMA_MAX_LOADED_MODELS: "1" # 先穩定再調大
+      OLLAMA_MAX_QUEUE: "256"
+      OLLAMA_NUM_PARALLEL: "2" # 跑穩後可調 3–4
+      OLLAMA_SCHED_SPREAD: "true"
+      OLLAMA_ORIGINS: "*"
+
+      # —— 上下文/顯存建議（混 32G/16G 先保守） ——
+      OLLAMA_NUM_CTX: "4096"
+      OLLAMA_GPU_LAYERS: "-1"
+
+      # —— 非 Swarm 時的 GPU 映射 ——
+      NVIDIA_VISIBLE_DEVICES: "0,1,2,3,4,5"
+      CUDA_DEVICE_ORDER: "PCI_BUS_ID"
+
+      # —— 可選：壓力邊界更穩，但可能略慢 ——
+      GGML_CUDA_ENABLE_UNIFIED_MEMORY: "1"
+
+    # —— Swarm 專用的限制（保留以比照 vLLM 寫法）——
+    # 若用 docker stack deploy，以下會生效；非 Swarm 會被忽略
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPUS:-8.0}"
+          memory: "${MEM_LIMIT:-24g}"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+
+    volumes:
+      - /root/.ollama:/root/.ollama
+      - /root/.ollama/models:/models
+
+    ports:
+      - "0.0.0.0:12168:11434" # 對外 12168 → 內部 11434
+
+    restart: unless-stopped
+
+networks:
+  default:
+    external: true
+    name: elfnet

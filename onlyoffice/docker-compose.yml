@@ -1,0 +1,147 @@
+services:
+  onlyoffice-mysql-server:
+    container_name: onlyoffice-mysql-server
+    image: mysql:8.0.36
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=onlyoffice
+      - MYSQL_USER=${OO_DB_USER}
+      - MYSQL_PASSWORD=${OO_DB_PASS}
+      - TZ=Asia/Taipei
+    networks:
+      - onlyoffice
+    restart: always
+    healthcheck:
+      # 用 socket，比 -h localhost 更穩；注意 $$ 讓容器內展開變數
+      test: ["CMD-SHELL", "mysqladmin ping --socket=/var/run/mysqld/mysqld.sock -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - /app/onlyoffice/mysql/conf.d:/etc/mysql/conf.d
+      - /app/onlyoffice/mysql/data:/var/lib/mysql
+
+  onlyoffice-elasticsearch:
+    image: onlyoffice/elasticsearch:7.16.3
+    container_name: onlyoffice-elasticsearch
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g -Dlog4j2.formatMsgNoLookups=true
+      - indices.fielddata.cache.size=30%
+      - indices.memory.index_buffer_size=30%
+      - ingest.geoip.downloader.enabled=false
+      - TZ=Asia/Taipei
+    networks:
+      - onlyoffice
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - /app/onlyoffice/elasticsearch/es_data:/usr/share/elasticsearch/data
+    expose:
+      - "9200"
+      - "9300"
+
+  onlyoffice-document-server:
+    container_name: onlyoffice-document-server
+    image: onlyoffice/documentserver:8.1
+    restart: always
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${DOCUMENT_JWT_SECRET}
+      - JWT_HEADER=AuthorizationJwt
+      - TZ=Asia/Taipei
+    networks:
+      - onlyoffice
+    # 可移除 depends_on（與 MySQL 無直接相依），保留也行
+    depends_on:
+      onlyoffice-mysql-server:
+        condition: service_healthy
+    expose:
+      - "80"
+      - "443"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - /app/onlyoffice/documentserver/data:/var/www/onlyoffice/Data
+      - /app/onlyoffice/documentserver/logs:/var/log/onlyoffice
+      - /app/onlyoffice/documentserver/fonts:/usr/share/fonts/truetype/custom
+      - /app/onlyoffice/documentserver/forgotten:/var/lib/onlyoffice/documentserver/App_Data/cache/files/forgotten
+
+  onlyoffice-community-server:
+    container_name: onlyoffice-community-server
+    image: onlyoffice/communityserver:12.6.0.1900
+    depends_on:
+      onlyoffice-mysql-server:
+        condition: service_healthy
+      onlyoffice-document-server:
+        condition: service_started
+      onlyoffice-elasticsearch:
+        condition: service_started
+    environment:
+      - ONLYOFFICE_CORE_MACHINEKEY=${CORE_MACHINEKEY}
+      - CONTROL_PANEL_PORT_80_TCP=80
+      - CONTROL_PANEL_PORT_80_TCP_ADDR=onlyoffice-control-panel
+      - DOCUMENT_SERVER_PORT_80_TCP_ADDR=onlyoffice-document-server
+      - DOCUMENT_SERVER_JWT_ENABLED=true
+      - DOCUMENT_SERVER_JWT_SECRET=${DOCUMENT_JWT_SECRET}
+      - DOCUMENT_SERVER_JWT_HEADER=AuthorizationJwt
+      - MYSQL_SERVER_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_SERVER_DB_NAME=onlyoffice
+      - MYSQL_SERVER_HOST=onlyoffice-mysql-server
+      - MYSQL_SERVER_USER=${OO_DB_USER}
+      - MYSQL_SERVER_PASS=${OO_DB_PASS}
+      - ELASTICSEARCH_SERVER_HOST=onlyoffice-elasticsearch
+      - ELASTICSEARCH_SERVER_HTTPPORT=9200
+      - TZ=Asia/Taipei
+    networks:
+      - onlyoffice
+    ports:
+      - "8080:80"
+      - "8443:443"
+      - "5222:5222"
+    restart: always
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - /app/onlyoffice/communityserver/data:/var/www/onlyoffice/Data
+      - /app/onlyoffice/communityserver/logs:/var/log/onlyoffice
+      - /app/onlyoffice/communityserver/letsencrypt:/etc/letsencrypt
+      - /app/onlyoffice/documentserver/data:/var/www/onlyoffice/DocumentServerData
+      - /app/onlyoffice/community/certs:/var/www/onlyoffice/Data/certs
+
+  onlyoffice-control-panel:
+    container_name: onlyoffice-control-panel
+    image: onlyoffice/controlpanel:3.5.2.530
+    depends_on:
+      onlyoffice-document-server:
+        condition: service_started
+      onlyoffice-community-server:
+        condition: service_started
+    environment:
+      - ONLYOFFICE_CORE_MACHINEKEY=${CORE_MACHINEKEY}
+      - TZ=Asia/Taipei
+    expose:
+      - "80"
+      - "443"
+    restart: always
+    # 先不要綁 docker.sock，避免它關/重建你的容器
+    volumes:
+      - /app/onlyoffice/controlpanel/data:/var/www/onlyoffice/Data
+      - /app/onlyoffice/controlpanel/logs:/var/log/onlyoffice
+    networks:
+      - onlyoffice
+
+networks:
+  onlyoffice:
+    driver: bridge
