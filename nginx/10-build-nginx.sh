@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # ================================================
-# 編譯 Nginx + GeoIP2 + Cloudflare real_ip + UFW 基線
+# 編譯 10-build-nginx.sh
 # 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
-# 作者：楊清雲
+# 說明：編譯Nginx1,29.1，開啟UFW+GeoIP2+Cloudflare real_ip
 # 日期：2025-10-03
 # ===============================================
 set -euo pipefail
 
 # ===== 可調參數（可用環境變數覆寫） =====
 BUILD_DIR="${BUILD_DIR:-/home/nginx_build_geoip2}"
-NGINX_VERSION="${NGINX_VERSION:-1.29.1}"
-LAN_CIDR="${LAN_CIDR:-192.168.25.0/24}"
+NGINX_VERSION="${NGINX_VERSION:-1.29.1}" # Nginx 版本
+LAN_CIDR="${LAN_CIDR:-192.168.25.0/24}"  # 本機介面 IPv4
 
 UFW_BASELINE="${UFW_BASELINE:-yes}"   # yes: 套用基礎 UFW（80/443 對外、22/8080 僅內網）
 UFW_SSH_LIMIT="${UFW_SSH_LIMIT:-no}"  # yes: 把內網 SSH 規則改限速

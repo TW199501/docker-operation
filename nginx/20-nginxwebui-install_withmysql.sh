@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# 20-nginxwebui-install.sh（簡化：固定使用 MariaDB）
-# 用法：sudo bash /home/20-nginxwebui-install.sh
+# ================================================
+# 編譯 20-nginxwebui-install_withmysql.sh
+# 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
+# 說明：安裝 nginxWebUI + MariaDB(與25-nginxwebui-install.sh不同二選一二選一)
+# 日期：2025-10-03
+# ===============================================
 set -euo pipefail
 
 # 可調參數

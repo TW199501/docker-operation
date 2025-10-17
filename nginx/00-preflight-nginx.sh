@@ -1,4 +1,10 @@
 # 存檔並執行
+# ================================================
+# 編譯 00-preflight-nginx.sh 基線
+# 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
+# 說明：安裝前的準備工作
+# 日期：2025-10-03
+# ===============================================
 sudo tee /root/nginx-preflight.sh >/dev/null <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail

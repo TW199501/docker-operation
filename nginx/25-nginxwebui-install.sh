@@ -1,4 +1,10 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash#
+# ===============================================
+# 編譯 25-nginxwebui-install.sh
+# 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
+# 說明：安裝 nginxWebUI + SQLite
+# 日期：2025-10-03
+# ===============================================
 set -euo pipefail
 
 # === 基本參數（可用環境變數覆寫）===

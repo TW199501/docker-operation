@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # ================================================
-# 15-modsecurity-nginx.sh
-# 安裝 libModSecurity v3 + OWASP CRS，並編譯/載入
+# 編譯 15-modsecurity-nginx.sh
+# 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
+# 說明：安裝 libModSecurity v3 + OWASP CRS，並編譯/載入
 # ngx_http_modsecurity_module.so（動態模組）
-# 適用：已完成 Nginx 編譯安裝（/usr/sbin/nginx, /etc/nginx）
-# 使用：sudo bash 15-modsecurity-nginx.sh
-# ================================================
+# 適用：基礎WAF
+# 日期：2025-10-03
+# ===============================================
 set -euo pipefail
 
 # ---------- 可調 ----------

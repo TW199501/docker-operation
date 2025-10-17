@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # =========================================================
-# 30-keepalived-install.sh
+# 編譯 30-keepalived-install.sh
+# 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
+# 說明：安裝 keepalived + SQLite
+# 備註：
 # - 安裝/升級 keepalived（預設編譯安裝 2.3.4）
 # - 啟用 script 安全、Nginx 健檢
 # - 支援單播（unicast）：第一台先裝也能先拿 VIP
@@ -9,7 +12,6 @@
 # 可用環境變數略過互動（例）：
 #   ROLE=MASTER IFACE=eth0 VRID=51 VIP_CIDR=192.168.25.250/24 \
 #   PEER_IP=192.168.25.21 PRIORITY=200 OPEN_HTTP=yes OPEN_HTTPS=yes \
-#   sudo bash 30-keepalived-install.sh
 # =========================================================
 set -euo pipefail
 
