@@ -43,6 +43,23 @@ services:
     ports:
       - "80:80"
 
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: always
+    environment:
+      - TZ=Asia/Taipei            # 讓排程按台北時間跑
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 如需私有 registry 認證再開啟下一行
+      # - ~/.docker/config.json:/config.json:ro
+    command:
+      # 每週日 04:00 執行一次；更新後清掉舊層
+      - --schedule
+      - "0 0 4 * * 0"
+      - --cleanup
+      # 若只想更新有貼標籤的容器，額外加上：
+      # - --label-enable
 volumes:
   vaultwarden:
   vaultwarden-db:
