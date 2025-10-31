@@ -1,20 +1,13 @@
 name: digirunner-open-source
-services:
-    dgr:
-        image: tpisoftwareopensource/digirunner-open-source
-        ports:
-            - "31080:18080"
-        environment:
-            - TZ=Asia/Taipei
 
 services:
   dgr-h2db-detect:
     container_name: dgr-h2db-detect
     image: bash
     volumes:
-      - /mnt/storage/app/digirunner/db:/opt/db
+      - ./db:/opt/db
       - shared:/opt/shared
-    command:
+    command: |
       bash -c '
       cat << EOF > /opt/shared/dgr.args
       -Xms2g
@@ -41,7 +34,8 @@ services:
       - "@/opt/shared/dgr.args"
       - "org.springframework.boot.loader.launch.PropertiesLauncher"
     volumes:
-      - /mnt/storage/app/digirunner/db:/opt/digirunner/db
+      - ./db:/opt/digirunner/db
       - shared:/opt/shared
 
-
+volumes:
+  shared:
