@@ -246,6 +246,17 @@ function install_guest_agent() {
   msg_ok "Prepared QEMU Guest Agent inside image"
 }
 
+function install_docker_stack() {
+  msg_info "Injecting Docker engine and Compose"
+  virt-customize -a "${FILE}" --install apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null
+  virt-customize -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null
+  virt-customize -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null
+  virt-customize -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null
+  virt-customize -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null
+  virt-customize -a "${FILE}" --run-command "systemctl enable docker" >/dev/null
+  msg_ok "Prepared Docker engine and Compose inside image"
+}
+
 # This function checks the version of Proxmox Virtual Environment (PVE) and exits if the version is not supported.
 # Supported: Proxmox VE 8.0.x – 8.9.x and 9.0 (NOT 9.1+)
 pve_check() {
@@ -640,6 +651,11 @@ msg_info "Creating a Debian 13 VM"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags community-script -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
+install_guest_agent
+if [ "$INSTALL_DOCKER" == "yes" ]; then
+  install_docker_stack
+fi
+
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
 if [ "$CLOUD_INIT" == "yes" ]; then
   # 配置 NoCloud
@@ -693,18 +709,6 @@ if [ -n "$DISK_SIZE" ]; then
 else
   msg_info "Using default disk size of $DEFAULT_DISK_SIZE GB"
   qm resize $VMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
-fi
-
-if [ "$INSTALL_DOCKER" == "yes" ]; then
-  msg_info "Installing Docker and Docker Compose Plugin"
-  virt-customize -a "${FILE}" --install apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null
-  virt-customize -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null
-  virt-customize -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null
-  virt-customize -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null
-  virt-customize -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null
-  virt-customize -a "${FILE}" --run-command "systemctl enable docker" >/dev/null
-  virt-customize -a "${FILE}" --run-command "echo -e '\nDocker Compose version: $(docker-compose --version)'" >/dev/null
-  msg_ok "Docker and Docker Compose installed"
 fi
 
 msg_ok "Created a Debian 13 VM ${CL}${BL}(${HN})"
