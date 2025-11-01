@@ -216,15 +216,18 @@ EOF
   fi
 
   iso_name="nocloud-${VMID}.iso"
-  if pvesm list "$iso_storage" | awk 'NR>1 {print $2}' | grep -qx "iso/${iso_name}"; then
-    if ! pvesm free "${iso_storage}:iso/${iso_name}" >/dev/null 2>&1; then
-      msg_warn "Failed to remove existing NoCloud ISO; attempting to overwrite"
-    fi
-  fi
-  if ! pvesm upload "$iso_storage" nocloud.iso "iso/${iso_name}" >/dev/null; then
-    msg_error "Failed to upload NoCloud ISO to storage ${iso_storage}"
+  iso_mount=$(pvesm path "${iso_storage}:iso")
+  if [ -z "$iso_mount" ]; then
+    msg_error "Unable to resolve ISO path for storage ${iso_storage}"
     return 1
   fi
+
+  mkdir -p "$iso_mount"
+  if ! cp nocloud.iso "${iso_mount}/${iso_name}"; then
+    msg_error "Failed to copy NoCloud ISO into ${iso_storage}"
+    return 1
+  fi
+  chmod 0644 "${iso_mount}/${iso_name}"
 
   if ! qm set "$VMID" --ide3 ${iso_storage}:iso/${iso_name},media=cdrom >/dev/null; then
     msg_error "Failed to attach NoCloud ISO to VM ${VMID}"
