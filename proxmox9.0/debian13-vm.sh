@@ -351,6 +351,14 @@ function default_settings() {
   echo -e "${CLOUD}${BOLD}${DGN} Configure NoCloud: ${BGN}no${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
+
+  if (whiptail --title "DOCKER" --yesno "Install Docker and Docker Compose Plugin?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN} Install Docker: ${BGN}yes${CL}"
+    INSTALL_DOCKER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN} Install Docker: ${BGN}no${CL}"
+    INSTALL_DOCKER="no"
+  fi
 }
 
 function advanced_settings() {
@@ -677,7 +685,9 @@ if [ -z "$ROOT_DISK_REF" ]; then
   exit 1
 fi
 
-qm set $VMID --efidisk0 ${STORAGE}:size=4M${FORMAT} >/dev/null
+EFI_VOL="${STORAGE}:vm-${VMID}-efidisk-0"
+pvesm alloc "$STORAGE" "$VMID" "vm-${VMID}-efidisk-0" 4M >/dev/null
+qm set $VMID --efidisk0 ${EFI_VOL}${FORMAT} >/dev/null
 
 qm set $VMID \
   -scsi0 ${ROOT_DISK_REF},${DISK_CACHE}${THIN} \
