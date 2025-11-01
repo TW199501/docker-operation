@@ -19,7 +19,16 @@ EOF
 }
 header_info
 
-# 檢查依賴項
+# This script can optionally source helper functions if they are available.
+# shellcheck disable=SC1091
+[ -f "./api.func" ] && source "./api.func"
+
+if ! declare -f post_update_to_api >/dev/null 2>&1; then
+  post_update_to_api() {
+    return
+  }
+fi
+
 check_dependencies
 
 # 詢問是否安裝 Docker
@@ -54,6 +63,7 @@ TAB="  "
 CM="${TAB}✔️${TAB}${CL}"
 CROSS="${TAB}✖️${TAB}${CL}"
 INFO="${TAB}💡${TAB}${CL}"
+WARN="${TAB}⚠️${TAB}${CL}"
 OS="${TAB}🖥️${TAB}${CL}"
 CONTAINERTYPE="${TAB}📦${TAB}${CL}"
 DISKSIZE="${TAB}💾${TAB}${CL}"
@@ -137,6 +147,26 @@ function msg_error() {
   echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
 }
 
+function msg_warn() {
+  local msg="$1"
+  echo -e "${BFR}${WARN}${YW}${msg}${CL}"
+}
+
+function check_dependencies() {
+  local missing=()
+  local deps=(curl whiptail qm pvesm pvesh genisoimage virt-customize openssl)
+  for dep in "${deps[@]}"; do
+    if ! command -v "$dep" >/dev/null 2>&1; then
+      missing+=("$dep")
+    fi
+  done
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    msg_error "Missing required dependencies: ${missing[*]}"
+    exit 1
+  fi
+}
+
 function check_root() {
   if [[ "$(id -u)" -ne 0 || $(ps -o comm= -p $PPID) == "sudo" ]]; then
     clear
@@ -147,14 +177,74 @@ function check_root() {
   fi
 }
 
-function setup_cloudinit() {
+function setup_nocloud() {
   local VMID="$1"
-  qm set "$VMID" --ide2 local-lvm:cloudinit
-  qm set "$VMID" --ciuser "debian" --cipassword "your_password"
+  local HN="$2"
+  local iso_storage iso_name iso_dir iso_path
+
+  # 創建 NoCloud 配置目錄
+  mkdir -p nocloud
+  
+  # 生成 meta-data
+  cat > nocloud/meta-data <<EOF
+instance-id: ${HN}
+local-hostname: ${HN}
+EOF
+
+  # 生成 user-data
+  cat > nocloud/user-data <<EOF
+#cloud-config
+user: debian
+password: debian
+chpasswd: { expire: False }
+ssh_pwauth: True
+package_update: true
+package_upgrade: true
+EOF
+
+  # 添加 SSH 密鑰（如果存在）
   if [ -f "$HOME/.ssh/id_rsa.pub" ]; then
-    qm set "$VMID" --sshkeys "$HOME/.ssh/id_rsa.pub"
+    echo "ssh_authorized_keys:" >> nocloud/user-data
+    echo "  - $(cat $HOME/.ssh/id_rsa.pub)" >> nocloud/user-data
   fi
-  msg_ok "Cloud-Init configured for VM $VMID"
+
+  # 創建 NoCloud ISO
+  if ! genisoimage -quiet -output nocloud.iso -volid cidata -joliet -rock nocloud/meta-data nocloud/user-data; then
+    msg_error "Failed to generate NoCloud seed ISO"
+    return 1
+  fi
+
+  iso_storage=$(pvesm status -content iso | awk 'NR>1 {print $1; exit}')
+  if [ -z "$iso_storage" ]; then
+    msg_error "No storage with ISO content found; cannot attach NoCloud seed"
+    return 1
+  fi
+
+  iso_name="nocloud-${VMID}.iso"
+  if pvesm list "$iso_storage" | awk 'NR>1 {print $2}' | grep -qx "iso/${iso_name}"; then
+    if ! pvesm free "${iso_storage}:iso/${iso_name}" >/dev/null 2>&1; then
+      msg_warn "Failed to remove existing NoCloud ISO; attempting to overwrite"
+    fi
+  fi
+  if ! pvesm upload "$iso_storage" nocloud.iso "iso/${iso_name}" >/dev/null; then
+    msg_error "Failed to upload NoCloud ISO to storage ${iso_storage}"
+    return 1
+  fi
+
+  if ! qm set "$VMID" --ide3 ${iso_storage}:iso/${iso_name},media=cdrom >/dev/null; then
+    msg_error "Failed to attach NoCloud ISO to VM ${VMID}"
+    return 1
+  fi
+
+  msg_ok "NoCloud seed attached from storage ${iso_storage} for VM $VMID"
+}
+
+function install_guest_agent() {
+  local VMID="$1"
+  qm set "$VMID" --agent enabled=1
+  virt-customize -a "${FILE}" --install qemu-guest-agent >/dev/null
+  virt-customize -a "${FILE}" --run-command "systemctl enable --now qemu-guest-agent" >/dev/null
+  msg_ok "QEMU Guest Agent installed and enabled for VM $VMID"
 }
 
 # This function checks the version of Proxmox Virtual Environment (PVE) and exits if the version is not supported.
@@ -249,7 +339,7 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}no${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Configure NoCloud: ${BGN}no${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
 }
@@ -419,11 +509,11 @@ function advanced_settings() {
     exit-script
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --yesno "Configure the VM with Cloud-init?" --defaultno 10 58); then
-    echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}yes${CL}"
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "NO-CLOUD CONFIG" --yesno "Configure the VM with NoCloud (local cloud-init)?" --defaultno 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Configure NoCloud: ${BGN}yes${CL}"
     CLOUD_INIT="yes"
   else
-    echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}no${CL}"
+    echo -e "${CLOUD}${BOLD}${DGN}Configure NoCloud: ${BGN}no${CL}"
     CLOUD_INIT="no"
   fi
 
@@ -506,10 +596,24 @@ else
 fi
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
-curl -f#SL -o "$(basename "$URL")" "$URL"
-echo -en "\e[1A\e[0K"
-FILE=$(basename $URL)
-msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
+# 下載鏡像文件，最多重試3次
+for i in {1..3}; do
+  if curl -f#SL -o "$(basename "$URL")" "$URL"; then
+    echo -en "\e[1A\e[0K"
+    FILE=$(basename $URL)
+    msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
+    break
+  else
+    if [ $i -eq 3 ]; then
+      msg_error "Failed to download image after 3 attempts"
+      msg_info "Please check your network connection and try again"
+      exit 1
+    else
+      msg_warn "Download attempt $i failed, retrying..."
+      sleep 5
+    fi
+  fi
+done
 
 STORAGE_TYPE=$(pvesm status -storage $STORAGE | awk 'NR>1 {print $2}')
 case $STORAGE_TYPE in
@@ -539,10 +643,11 @@ qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} 
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
 if [ "$CLOUD_INIT" == "yes" ]; then
+  # 配置 NoCloud
+  setup_nocloud "$VMID" "$HN"
   qm set $VMID \
     -efidisk0 ${DISK0_REF}${FORMAT} \
     -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -scsi1 ${STORAGE}:cloudinit \
     -boot order=scsi0 \
     -serial0 socket >/dev/null
 else
