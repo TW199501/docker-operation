@@ -627,29 +627,20 @@ done
 STORAGE_TYPE=$(pvesm status -storage $STORAGE | awk 'NR>1 {print $2}')
 case $STORAGE_TYPE in
 nfs | dir)
-  DISK_EXT=".qcow2"
-  DISK_REF="$VMID/"
   DISK_IMPORT="-format qcow2"
   THIN=""
-  EFI_FORMAT_OPT="--format qcow2"
   IS_ZFS="no"
   ;;
 btrfs)
-  DISK_EXT=".raw"
-  DISK_REF="$VMID/"
   DISK_IMPORT="-format raw"
   FORMAT=",efitype=4m"
   THIN=""
-  EFI_FORMAT_OPT="--format raw"
   IS_ZFS="no"
   ;;
 zfspool)
-  DISK_EXT=""
-  DISK_REF=""
   DISK_IMPORT="-format raw"
   FORMAT=",efitype=4m"
   THIN=""
-  EFI_FORMAT_OPT="--format raw"
   IS_ZFS="yes"
   ;;
 *)
@@ -657,11 +648,6 @@ zfspool)
   exit 1
   ;;
 esac
-for i in {0,1}; do
-  disk="DISK$i"
-  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
-  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-done
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   VM_TAG="debian13-docker"
@@ -673,9 +659,6 @@ msg_info "Creating a Debian 13 VM"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags $VM_TAG -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 
-if [ "$IS_ZFS" != "yes" ]; then
-  pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
-fi
 install_guest_agent
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   install_docker_stack
@@ -683,20 +666,20 @@ fi
 
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
 
-if [ "$IS_ZFS" == "yes" ]; then
-  ROOT_DISK_REF=${STORAGE}:vm-${VMID}-disk-0
-  qm set $VMID --efidisk0 ${STORAGE}:0${FORMAT} >/dev/null
-else
-  ROOT_DISK_REF=${DISK1_REF}
-fi
-
 if [ "$CLOUD_INIT" == "yes" ]; then
   # 配置 NoCloud
   setup_nocloud "$VMID" "$HN"
 fi
 
+ROOT_DISK_REF=$(pvesm list "$STORAGE" | awk -v id="$VMID" '$2 ~ ("vm-"id"-disk-") {print $1":"$2}' | sort | tail -n1)
+if [ -z "$ROOT_DISK_REF" ]; then
+  msg_error "Unable to determine imported disk volume for VM $VMID"
+  exit 1
+fi
+
+qm set $VMID --efidisk0 ${STORAGE}:size=4M${FORMAT} >/dev/null
+
 qm set $VMID \
-  -efidisk0 ${DISK0_REF}${FORMAT} \
   -scsi0 ${ROOT_DISK_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
