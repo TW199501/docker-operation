@@ -632,6 +632,7 @@ nfs | dir)
   DISK_IMPORT="-format qcow2"
   THIN=""
   EFI_FORMAT_OPT="--format qcow2"
+  IS_ZFS="no"
   ;;
 btrfs)
   DISK_EXT=".raw"
@@ -640,6 +641,7 @@ btrfs)
   FORMAT=",efitype=4m"
   THIN=""
   EFI_FORMAT_OPT="--format raw"
+  IS_ZFS="no"
   ;;
 zfspool)
   DISK_EXT=""
@@ -648,6 +650,11 @@ zfspool)
   FORMAT=",efitype=4m"
   THIN=""
   EFI_FORMAT_OPT="--format raw"
+  IS_ZFS="yes"
+  ;;
+*)
+  msg_error "Unsupported storage type: ${STORAGE_TYPE}"
+  exit 1
   ;;
 esac
 for i in {0,1}; do
@@ -665,28 +672,34 @@ fi
 msg_info "Creating a Debian 13 VM"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags $VM_TAG -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
-pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
+
+if [ "$IS_ZFS" != "yes" ]; then
+  pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
+fi
 install_guest_agent
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   install_docker_stack
 fi
 
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
+
+if [ "$IS_ZFS" == "yes" ]; then
+  ROOT_DISK_REF=${STORAGE}:vm-${VMID}-disk-0
+  qm set $VMID --efidisk0 ${STORAGE}:0${FORMAT} >/dev/null
+else
+  ROOT_DISK_REF=${DISK1_REF}
+fi
+
 if [ "$CLOUD_INIT" == "yes" ]; then
   # 配置 NoCloud
   setup_nocloud "$VMID" "$HN"
-  qm set $VMID \
-    -efidisk0 ${DISK0_REF}${FORMAT} \
-    -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -boot order=scsi0 \
-    -serial0 socket >/dev/null
-else
-  qm set $VMID \
-    -efidisk0 ${DISK0_REF}${FORMAT} \
-    -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -boot order=scsi0 \
-    -serial0 socket >/dev/null
 fi
+
+qm set $VMID \
+  -efidisk0 ${DISK0_REF}${FORMAT} \
+  -scsi0 ${ROOT_DISK_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
+  -boot order=scsi0 \
+  -serial0 socket >/dev/null
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
