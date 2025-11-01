@@ -685,9 +685,7 @@ if [ -z "$ROOT_DISK_REF" ]; then
   exit 1
 fi
 
-EFI_VOL="${STORAGE}:vm-${VMID}-efidisk-0"
-pvesm alloc "$STORAGE" "$VMID" "vm-${VMID}-efidisk-0" 4M >/dev/null
-qm set $VMID --efidisk0 ${EFI_VOL}${FORMAT} >/dev/null
+qm set $VMID --efidisk0 ${STORAGE}:0${FORMAT} >/dev/null
 
 qm set $VMID \
   -scsi0 ${ROOT_DISK_REF},${DISK_CACHE}${THIN} \
