@@ -18,6 +18,17 @@ function header_info {
 EOF
 }
 header_info
+
+# 檢查依賴項
+check_dependencies
+
+# 詢問是否安裝 Docker
+if whiptail --backtitle "Proxmox VE Helper Scripts" --title "Docker Installation" --yesno "Do you want to install Docker and Docker Compose?" 10 60; then
+  INSTALL_DOCKER="yes"
+else
+  INSTALL_DOCKER="no"
+fi
+
 echo -e "\n Loading..."
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 RANDOM_UUID="$(cat /proc/sys/kernel/random/uuid)"
@@ -134,6 +145,16 @@ function check_root() {
     sleep 2
     exit
   fi
+}
+
+function setup_cloudinit() {
+  local VMID="$1"
+  qm set "$VMID" --ide2 local-lvm:cloudinit
+  qm set "$VMID" --ciuser "debian" --cipassword "your_password"
+  if [ -f "$HOME/.ssh/id_rsa.pub" ]; then
+    qm set "$VMID" --sshkeys "$HOME/.ssh/id_rsa.pub"
+  fi
+  msg_ok "Cloud-Init configured for VM $VMID"
 }
 
 # This function checks the version of Proxmox Virtual Environment (PVE) and exits if the version is not supported.
