@@ -240,11 +240,10 @@ EOF
 }
 
 function install_guest_agent() {
-  local VMID="$1"
-  qm set "$VMID" --agent enabled=1
+  msg_info "Injecting QEMU Guest Agent packages"
   virt-customize -a "${FILE}" --install qemu-guest-agent >/dev/null
-  virt-customize -a "${FILE}" --run-command "systemctl enable --now qemu-guest-agent" >/dev/null
-  msg_ok "QEMU Guest Agent installed and enabled for VM $VMID"
+  virt-customize -a "${FILE}" --run-command "systemctl enable qemu-guest-agent || true" >/dev/null
+  msg_ok "Prepared QEMU Guest Agent inside image"
 }
 
 # This function checks the version of Proxmox Virtual Environment (PVE) and exits if the version is not supported.
