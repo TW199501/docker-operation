@@ -671,7 +671,7 @@ if [ "$CLOUD_INIT" == "yes" ]; then
   setup_nocloud "$VMID" "$HN"
 fi
 
-ROOT_DISK_REF=$(pvesm list "$STORAGE" | awk -v id="$VMID" '$2 ~ ("vm-"id"-disk-") {print $1":"$2}' | sort | tail -n1)
+ROOT_DISK_REF=$(qm config "$VMID" | awk -F': ' '/^unused[0-9]+:/ {print $2; exit}')
 if [ -z "$ROOT_DISK_REF" ]; then
   msg_error "Unable to determine imported disk volume for VM $VMID"
   exit 1
@@ -680,7 +680,7 @@ fi
 qm set $VMID --efidisk0 ${STORAGE}:size=4M${FORMAT} >/dev/null
 
 qm set $VMID \
-  -scsi0 ${ROOT_DISK_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
+  -scsi0 ${ROOT_DISK_REF},${DISK_CACHE}${THIN} \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
 DESCRIPTION=$(
