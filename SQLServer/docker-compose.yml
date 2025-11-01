@@ -3,17 +3,27 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql2022-dev
     environment:
-      - ACCEPT_EULA= Y
+      - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
       - MSSQL_PID: "Developer"
       - MSSQL_COLLATION: "Chinese_Taiwan_Stroke_Count_100_CI_AS_SC_UTF8"
       - MSSQL_AGENT_ENABLED: "true"
+      - MSSQL_TLS_CIPHER_SUITES: "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
       - TZ: "Asia/Taipei"
     ports:
       - "1433:1433"
     volumes:
       - /mnt/Storage/app/mssql/sql_data:/var/opt/mssql
+      - /mnt/Storage/app/mssql/certs:/etc/mssql/certs
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 12G
+        reservations:
+          cpus: '2.0'
+          memory: 6G
     healthcheck:
       test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${MSSQL_SA_PASSWORD}", "-Q", "SELECT 1" ]
       interval: 10s
