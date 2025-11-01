@@ -596,10 +596,11 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
   virt-customize -a "${FILE}" --install apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null
   virt-customize -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null
   virt-customize -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null
-  virt-customize -a "${FILE}" --run-command "apt-get update -qq && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-compose" >/dev/null
+  virt-customize -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null
+  virt-customize -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null
   virt-customize -a "${FILE}" --run-command "systemctl enable docker" >/dev/null
-  virt-customize -a "${FILE}" --run-command "echo -e '\nDocker Compose versions installed:\n- Plugin: $(docker compose version)\n- Standalone: $(docker-compose --version)'" >/dev/null
-  msg_ok "Docker and Docker Compose Plugin installed"
+  virt-customize -a "${FILE}" --run-command "echo -e '\nDocker Compose version: $(docker-compose --version)'" >/dev/null
+  msg_ok "Docker and Docker Compose installed"
 fi
 
 msg_ok "Created a Debian 13 VM ${CL}${BL}(${HN})"
