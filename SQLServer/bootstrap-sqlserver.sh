@@ -17,6 +17,7 @@ DEFAULT_MEM_LIMIT=""
 DEFAULT_MEM_RESERVE=""
 DEFAULT_CORE_COUNT=""
 DEFAULT_RAM_SIZE=""
+DEFAULT_CERT_DIR=""
 DEFAULT_TIMEZONE="Asia/Taipei"
 
 error() {
@@ -252,7 +253,7 @@ fi
 DATA_DIR="$BASE_DIR/sql_data"
 LOG_DIR="$BASE_DIR/sql_log"
 BACKUP_DIR="$BASE_DIR/sql_backup"
-CERT_DIR="$BASE_DIR/certs"
+DEFAULT_CERT_DIR="$BASE_DIR/certs"
 
 ask_default CONTAINER_NAME "容器名稱" "$DEFAULT_CONTAINER_NAME"
 ask_default HOST_PORT "主機對外 Port" "$DEFAULT_HOST_PORT"
@@ -264,6 +265,7 @@ ask_default MEM_RESERVE "記憶體保留 (例如 4G)" "$DEFAULT_MEM_RESERVE"
 ask_default TIMEZONE "容器時區" "$DEFAULT_TIMEZONE"
 ask_default CORE_COUNT "CPU 核心數" "$DEFAULT_CORE_COUNT"
 ask_default RAM_SIZE "記憶體大小 (MiB)" "$DEFAULT_RAM_SIZE"
+ask_default CERT_DIR "憑證目錄 (含 fullchain.pem/privkey.pem)" "$DEFAULT_CERT_DIR"
 
 ask_yes_no GEN_PWD "是否自動產生 MSSQL_SA_PASSWORD" "y"
 if [ "$GEN_PWD" = "y" ]; then
@@ -292,12 +294,24 @@ info "建立/調整資料目錄權限"
 ensure_directory "$DATA_DIR" 770
 ensure_directory "$LOG_DIR" 770
 ensure_directory "$BACKUP_DIR" 770
-ensure_directory "$CERT_DIR" 750
+if [ "$CERT_DIR" = "$DEFAULT_CERT_DIR" ]; then
+  ensure_directory "$CERT_DIR" 750
+else
+  ensure_directory "$CERT_DIR" ""
+fi
 
 if command -v chown >/dev/null 2>&1; then
   ask_yes_no SET_OWNERSHIP "是否將目錄擁有者設定為 10001:0 (mssql 預設)" "y"
   if [ "$SET_OWNERSHIP" = "y" ]; then
-    chown -R 10001:0 "$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR" "$CERT_DIR"
+    OWNERSHIP_TARGETS=("$DATA_DIR" "$LOG_DIR" "$BACKUP_DIR")
+    if [ "$CERT_DIR" = "$DEFAULT_CERT_DIR" ]; then
+      OWNERSHIP_TARGETS+=("$CERT_DIR")
+    else
+      info "憑證目錄為自訂路徑，略過 chown：$CERT_DIR"
+    fi
+    if [ "${#OWNERSHIP_TARGETS[@]}" -gt 0 ]; then
+      chown -R 10001:0 "${OWNERSHIP_TARGETS[@]}"
+    fi
   fi
 fi
 
