@@ -14,4 +14,9 @@ sed -i -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' -e 's/^Pa
 ssh-keygen -A
 systemctl restart sshd
 ```
-
+3.把硬碟擴大
+```bash
+sudo apt update && sudo apt install -y cloud-guest-utils
+sudo growpart /dev/sda 1
+sudo resize2fs /dev/sda1
+```

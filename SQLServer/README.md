@@ -20,7 +20,7 @@
 > Docker Compose v2 (`docker compose`) 必須已可使用。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/SQLServer/bootstrap-sqlserver.sh -o bootstrap-sqlserver.sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/SQLServer/bootstrap-sqlserver.sh)"
 chmod +x bootstrap-sqlserver.sh
 sudo ./bootstrap-sqlserver.sh
 ```

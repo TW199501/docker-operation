@@ -7,14 +7,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 COMPOSE_FILE_URL="https://raw.githubusercontent.com/TW199501/docker-operation/main/SQLServer/docker-compose.yml"
 ENV_FILE="${SCRIPT_DIR}/.env"
-DEFAULT_BASE_DIR="DEFAULT_BASE_DIR"
-DEFAULT_CONTAINER_NAME="mssql2022-dev"
-DEFAULT_HOST_PORT="1433"
+DEFAULT_BASE_DIR="$(pwd)"
+DEFAULT_CONTAINER_NAME="mssql2022"
+DEFAULT_HOST_PORT="1433or自訂"
 DEFAULT_COLLATION="Chinese_Taiwan_Stroke_Count_100_CI_AS_SC_UTF8"
-DEFAULT_CPU_LIMIT="4.0"
-DEFAULT_CPU_RESERVE="2.0"
-DEFAULT_MEM_LIMIT="12G"
-DEFAULT_MEM_RESERVE="6G"
+DEFAULT_CPU_LIMIT=""
+DEFAULT_CPU_RESERVE=""
+DEFAULT_MEM_LIMIT=""
+DEFAULT_MEM_RESERVE=""
+DEFAULT_CORE_COUNT=""
+DEFAULT_RAM_SIZE=""
 DEFAULT_TIMEZONE="Asia/Taipei"
 
 error() {
@@ -23,6 +25,73 @@ error() {
 
 info() {
   printf "[INFO] %s\n" "$1"
+}
+
+detect_host_defaults() {
+  # Detect CPU cores
+  if command -v nproc >/dev/null 2>&1; then
+    HOST_CORES=$(nproc --all)
+  else
+    HOST_CORES=1
+  fi
+  if [ -z "$HOST_CORES" ] || [ "$HOST_CORES" -lt 1 ]; then
+    HOST_CORES=1
+  fi
+
+  if [ "$HOST_CORES" -gt 1 ]; then
+    DEFAULT_CORE_COUNT=$((HOST_CORES - 1))
+  else
+    DEFAULT_CORE_COUNT=1
+  fi
+
+  CPU_LIMIT_VAL="$DEFAULT_CORE_COUNT"
+  if [ "$CPU_LIMIT_VAL" -lt 1 ]; then
+    CPU_LIMIT_VAL=1
+  fi
+  DEFAULT_CPU_LIMIT="${CPU_LIMIT_VAL}.0"
+
+  if [ "$CPU_LIMIT_VAL" -gt 1 ]; then
+    CPU_RESERVE_VAL=$((CPU_LIMIT_VAL - 1))
+  else
+    CPU_RESERVE_VAL=1
+  fi
+  DEFAULT_CPU_RESERVE="${CPU_RESERVE_VAL}.0"
+
+  # Detect Memory (MiB)
+  if [ -r /proc/meminfo ]; then
+    HOST_MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  else
+    HOST_MEM_MB=0
+  fi
+
+  if [ "$HOST_MEM_MB" -le 0 ]; then
+    HOST_MEM_MB=8192
+  fi
+
+  if [ "$HOST_MEM_MB" -gt 4096 ]; then
+    DEFAULT_RAM_SIZE=$((HOST_MEM_MB - 2048))
+  else
+    DEFAULT_RAM_SIZE=$((HOST_MEM_MB * 3 / 4))
+  fi
+
+  if [ "$DEFAULT_RAM_SIZE" -lt 2048 ]; then
+    DEFAULT_RAM_SIZE=2048
+  fi
+
+  DEFAULT_MEM_LIMIT_GB=$(((DEFAULT_RAM_SIZE + 1023) / 1024))
+  if [ "$DEFAULT_MEM_LIMIT_GB" -lt 2 ]; then
+    DEFAULT_MEM_LIMIT_GB=2
+  fi
+  DEFAULT_MEM_LIMIT="${DEFAULT_MEM_LIMIT_GB}G"
+
+  DEFAULT_MEM_RESERVE_GB=$((DEFAULT_MEM_LIMIT_GB / 2))
+  if [ "$DEFAULT_MEM_RESERVE_GB" -lt 1 ]; then
+    DEFAULT_MEM_RESERVE_GB=1
+  fi
+  DEFAULT_MEM_RESERVE="${DEFAULT_MEM_RESERVE_GB}G"
+
+  # Ensure RAM size matches limit in MiB
+  DEFAULT_RAM_SIZE=$((DEFAULT_MEM_LIMIT_GB * 1024))
 }
 
 ask_default() {
@@ -174,7 +243,12 @@ else
   fi
 fi
 
-ask_default BASE_DIR "主機資料根目錄" "$DEFAULT_BASE_DIR"
+detect_host_defaults
+
+ask_default BASE_DIR "主機資料根目錄 (預設為目前目錄)" "$DEFAULT_BASE_DIR"
+if [ -z "$BASE_DIR" ]; then
+  BASE_DIR="$(pwd)"
+fi
 DATA_DIR="$BASE_DIR/sql_data"
 LOG_DIR="$BASE_DIR/sql_log"
 BACKUP_DIR="$BASE_DIR/sql_backup"
@@ -183,11 +257,13 @@ CERT_DIR="$BASE_DIR/certs"
 ask_default CONTAINER_NAME "容器名稱" "$DEFAULT_CONTAINER_NAME"
 ask_default HOST_PORT "主機對外 Port" "$DEFAULT_HOST_PORT"
 ask_default COLLATION "資料庫排序 (Collation)" "$DEFAULT_COLLATION"
-ask_default CPU_LIMIT "CPU 上限" "$DEFAULT_CPU_LIMIT"
-ask_default CPU_RESERVE "CPU 保留" "$DEFAULT_CPU_RESERVE"
-ask_default MEM_LIMIT "記憶體上限" "$DEFAULT_MEM_LIMIT"
-ask_default MEM_RESERVE "記憶體保留" "$DEFAULT_MEM_RESERVE"
+ask_default CPU_LIMIT "CPU 上限 (例如 4.0)" "$DEFAULT_CPU_LIMIT"
+ask_default CPU_RESERVE "CPU 保留 (例如 2.0)" "$DEFAULT_CPU_RESERVE"
+ask_default MEM_LIMIT "記憶體上限 (例如 8G)" "$DEFAULT_MEM_LIMIT"
+ask_default MEM_RESERVE "記憶體保留 (例如 4G)" "$DEFAULT_MEM_RESERVE"
 ask_default TIMEZONE "容器時區" "$DEFAULT_TIMEZONE"
+ask_default CORE_COUNT "CPU 核心數" "$DEFAULT_CORE_COUNT"
+ask_default RAM_SIZE "記憶體大小 (MiB)" "$DEFAULT_RAM_SIZE"
 
 ask_yes_no GEN_PWD "是否自動產生 MSSQL_SA_PASSWORD" "y"
 if [ "$GEN_PWD" = "y" ]; then
@@ -249,6 +325,8 @@ MSSQL_LIMIT_CPU=$CPU_LIMIT
 MSSQL_LIMIT_MEM=$MEM_LIMIT
 MSSQL_RESERVE_CPU=$CPU_RESERVE
 MSSQL_RESERVE_MEM=$MEM_RESERVE
+MSSQL_CORE_COUNT=$CORE_COUNT
+MSSQL_RAM_SIZE=$RAM_SIZE
 EOF
 chmod 600 "$ENV_FILE"
 info "已寫入 $ENV_FILE"
