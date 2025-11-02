@@ -179,7 +179,7 @@ function setup_nocloud() {
 
   # 創建 NoCloud 配置目錄
   mkdir -p nocloud
-  
+
   # 生成 meta-data
   cat > nocloud/meta-data <<EOF
 instance-id: ${HN}
@@ -668,9 +668,9 @@ zfspool)
 esac
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
-  VM_TAG="debian13-docker"
+  VM_TAG="Debian13&docker"
 else
-  VM_TAG="debian"
+  VM_TAG="debian13"
 fi
 
 msg_info "Creating a Debian 13 VM"

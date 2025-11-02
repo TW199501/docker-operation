@@ -4,3 +4,10 @@
 # 其他忽略規則Local .env files
 .env
 !.env.example
+
+.vscode/
+.continue/
+.codebuddy
+
+
+

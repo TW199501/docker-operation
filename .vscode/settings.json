@@ -1,3 +1,7 @@
 {
-  "i18n-ally.editor.preferEditor": true
+  "i18n-ally.editor.preferEditor": true,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 4,
+  "files.eol": "\n"
 }
