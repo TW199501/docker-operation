@@ -210,6 +210,12 @@ EOF
   fi
 
   iso_storage=$(pvesm status -content iso | awk 'NR>1 {print $1; exit}')
+  if [ -n "$iso_storage" ]; then
+    iso_type=$(pvesm status -storage "$iso_storage" | awk 'NR>1 {print $2}')
+    if [ "$iso_type" != "dir" ]; then
+      iso_storage=""
+    fi
+  fi
   if [ -z "$iso_storage" ]; then
     iso_storage=$(pvesm status | awk 'NR>1 && $2=="dir" {print $1; exit}')
   fi
