@@ -24,3 +24,11 @@ services:
       start_period: 10s                               # 健康檢查開始前的延遲時間
     labels:
       - "com.centurylinklabs.watchtower.enable=true"  # 使用 Watchtower 啟用自動更新
+
+  watchtower:
+    image: containrrr/watchtower:latest               # Watchtower 映像，負責自動更新容器
+    container_name: watchtower                        # Watchtower 容器名稱
+    restart: unless-stopped                           # 除非手動停止，否則重新啟動容器
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock     # 掛載 Docker socket 以便監控容器
+    command: --cleanup --label-enable                 # 啟用標籤模式並清理舊映像
