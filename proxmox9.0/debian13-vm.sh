@@ -211,24 +211,28 @@ EOF
 
   iso_storage=$(pvesm status -content iso | awk 'NR>1 {print $1; exit}')
   if [ -z "$iso_storage" ]; then
-    msg_error "No storage with ISO content found; cannot attach NoCloud seed"
+    iso_storage=$(pvesm status | awk 'NR>1 && $2=="dir" {print $1; exit}')
+  fi
+  if [ -z "$iso_storage" ]; then
+    msg_error "No storage capable of holding ISO images was found; cannot attach NoCloud seed"
     return 1
   fi
 
+  iso_base=$(pvesm config "$iso_storage" | awk '/^path/ {print $2}')
+  if [ -z "$iso_base" ]; then
+    msg_error "Unable to resolve filesystem path for storage ${iso_storage}"
+    return 1
+  fi
+
+  iso_dir="${iso_base%/}/template/iso"
   iso_name="nocloud-${VMID}.iso"
-  iso_mount=$(pvesm path "${iso_storage}:iso")
-  if [ -z "$iso_mount" ]; then
-    msg_error "Unable to resolve ISO path for storage ${iso_storage}"
-    return 1
-  fi
-
-  mkdir -p "$iso_mount"
-  rm -f "${iso_mount}/${iso_name}" 2>/dev/null
-  if ! cp nocloud.iso "${iso_mount}/${iso_name}"; then
+  mkdir -p "$iso_dir"
+  rm -f "${iso_dir}/${iso_name}" 2>/dev/null
+  if ! cp nocloud.iso "${iso_dir}/${iso_name}"; then
     msg_error "Failed to copy NoCloud ISO into ${iso_storage}"
     return 1
   fi
-  chmod 0644 "${iso_mount}/${iso_name}"
+  chmod 0644 "${iso_dir}/${iso_name}"
 
   if ! qm set "$VMID" --ide3 ${iso_storage}:iso/${iso_name},media=cdrom >/dev/null; then
     msg_error "Failed to attach NoCloud ISO to VM ${VMID}"
