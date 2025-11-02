@@ -1,7 +1,10 @@
 {
-  "i18n-ally.editor.preferEditor": true,
+  "editor.fontFamily": "'Fira Code'",
+  "editor.fontLigatures": true,
+  "editor.fontWeight": "450",
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.tabSize": 4,
+  "i18n-ally.editor.preferEditor": true,
   "files.eol": "\n"
 }
