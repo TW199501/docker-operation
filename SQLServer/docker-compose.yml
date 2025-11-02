@@ -1,29 +1,29 @@
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: mssql2022-dev
+    container_name: ${MSSQL_CONTAINER_NAME}
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
-      - MSSQL_PID: "Developer"
-      - MSSQL_COLLATION: "Chinese_Taiwan_Stroke_Count_100_CI_AS_SC_UTF8"
-      - MSSQL_AGENT_ENABLED: "true"
-      - MSSQL_TLS_CIPHER_SUITES: "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-      - TZ: "Asia/Taipei"
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_PID: "${MSSQL_PID}"
+      MSSQL_COLLATION: "${MSSQL_COLLATION}"
+      MSSQL_AGENT_ENABLED: "${MSSQL_AGENT_ENABLED}"
+      MSSQL_TLS_CIPHER_SUITES: "${MSSQL_TLS_CIPHER_SUITES}"
+      TZ: "${TZ}"
     ports:
-      - "1433:1433"
+      - "${MSSQL_HOST_PORT}:1433"
     volumes:
-      - /mnt/Storage/app/mssql/sql_data:/var/opt/mssql
-      - /mnt/Storage/app/mssql/certs:/etc/mssql/certs
+      - ${MSSQL_DATA_DIR_HOST}:/var/opt/mssql
+      - ${MSSQL_CERT_DIR_HOST}:/etc/mssql/certs
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 12G
+          cpus: '${MSSQL_LIMIT_CPU}'
+          memory: ${MSSQL_LIMIT_MEM}
         reservations:
-          cpus: '2.0'
-          memory: 6G
+          cpus: '${MSSQL_RESERVE_CPU}'
+          memory: ${MSSQL_RESERVE_MEM}
     healthcheck:
       test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${MSSQL_SA_PASSWORD}", "-Q", "SELECT 1" ]
       interval: 10s
