@@ -8,8 +8,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
 ```
 2. 執行安裝SSH
 ```bash
-apt install openssh-client
-apt install openssh-server
+sudo apt update && sudo apt install -y openssh-client openssh-server
 passwd root
 sed -i -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' -e 's/^PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 ssh-keygen -A
