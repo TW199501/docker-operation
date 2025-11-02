@@ -668,7 +668,7 @@ zfspool)
 esac
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
-  VM_TAG="Debian13&docker"
+  VM_TAG="debian13-docker"
 else
   VM_TAG="debian13"
 fi
