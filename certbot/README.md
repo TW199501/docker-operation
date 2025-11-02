@@ -28,6 +28,7 @@ flowchart TD
 4. [其他常見情境](#4-其他常見情境)
 5. [續期設定](#5-續期設定)
 6. [注意事項](#6-注意事項)
+7. [acme.sh 替代方案（可選）](#7-acmesh-替代方案可選)
 
 ---
 
@@ -132,3 +133,79 @@ Let’s Encrypt 憑證有效期為 90 天；`certbot renew` 只會在距離到�
 - 建議定期檢查 `/var/log/certbot-renew.log`，確保續期流程無誤。
 ---
 
+### 7. acme.sh 替代方案（可選）
+若希望改用輕量化的 `acme.sh` 搭配 Cloudflare DNS，也可透過官方 Docker 映像完成。以下流程與上方 Certbot 方式互斥，請選其一維護即可。
+
+1. **建立資料目錄**：
+   ```bash
+   mkdir -p /opt/acme.sh
+   chmod 700 /opt/acme.sh
+   ```
+
+2. **準備 Cloudflare 憑證**  
+   - API Token（建議）：需具備 `Zone → DNS → Edit` 權限，於執行時以 `-e CF_Token="your_token"` 傳入。
+   - Global API Key：以 `-e CF_Key="your_global_key" -e CF_Email="your_email@example.com"` 傳入。
+
+3. **首次註冊（可選，但建議）**：
+   ```bash
+   docker run --rm -it \
+     -v "/opt/acme.sh:/acme.sh" \
+     neilpang/acme.sh --register-account -m your_email@example.com
+   ```
+
+4. **申請 Wildcard 憑證**：
+   ```bash
+   docker run --rm -it \
+     -v "/opt/acme.sh:/acme.sh" \
+     -e CF_Token="your_cloudflare_token" \
+     neilpang/acme.sh --issue \
+     --dns dns_cf \
+     -d yourdomain.com \
+     -d "*.yourdomain.com"
+   ```
+
+   憑證會位於 `/opt/acme.sh/yourdomain.com/`：
+   - `fullchain.cer`
+   - `yourdomain.com.key`
+
+5. **部署到固定路徑（選擇性）**：使用 `--install-cert` 讓 acme.sh 自動複製檔案到指定位置，便於服務掛載：
+   ```bash
+   docker run --rm -it \
+     -v "/opt/acme.sh:/acme.sh" \
+     neilpang/acme.sh --install-cert -d yourdomain.com \
+     --cert-file      /opt/acme.sh/deploy/yourdomain.com.crt \
+     --key-file       /opt/acme.sh/deploy/yourdomain.com.key \
+     --fullchain-file /opt/acme.sh/deploy/yourdomain.com.fullchain.pem
+   ```
+
+6. **設定續期排程**：acme.sh 會在執行 `--cron` 時檢查所有已申請的網域。確保命令能成功後，再寫入 crontab。
+
+   ```bash
+   docker run --rm \
+     -v "/opt/acme.sh:/acme.sh" \
+     -e CF_Token="your_cloudflare_token" \
+     neilpang/acme.sh --cron
+   ```
+
+   ```cron
+   15 3 * * * docker run --rm -v /opt/acme.sh:/acme.sh -e CF_Token="your_cloudflare_token" neilpang/acme.sh --cron >> /var/log/acme-cron.log 2>&1
+   ```
+
+> 若使用 Global API Key，將上述命令中的 `-e CF_Token=...` 改為同時傳入 `-e CF_Key=... -e CF_Email=...`。
+
+
+### 8. 自動化腳本
+
+為了簡化流程，我們提供了一個互動式腳本 `bootstrap-certificates.sh`，可協助您自動完成 Certbot 或 acme.sh 的設定與首次申請。
+
+1. **下載腳本**：
+   ```bash
+   bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/certbot/bootstrap-certificates.sh)"
+   ```
+
+2. **執行腳本**：
+   ```bash
+   ./bootstrap-certificates.sh
+   ```
+
+腳本會引導您輸入網域、Cloudflare 憑證等資訊，並自動建立目錄、申請憑證、設定續期排程。請確保 Docker 已安裝並執行中。
