@@ -369,7 +369,7 @@ function default_settings() {
   VLAN=""
   MTU=""
   START_VM="yes"
-  CLOUD_INIT="no"
+  CLOUD_INIT="yes"
   METHOD="default"
   echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
@@ -383,7 +383,7 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN} VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN} Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${CLOUD}${BOLD}${DGN} Configure NoCloud: ${BGN}no${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN} Configure Cloud-Init: ${BGN}yes${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
 
@@ -561,13 +561,8 @@ function advanced_settings() {
     exit-script
   fi
 
-  if (whiptail  --title "NO-CLOUD CONFIG" --yesno "Configure the VM with NoCloud (local cloud-init)?" --defaultno 10 58); then
-    echo -e "${CLOUD}${BOLD}${DGN}Configure NoCloud: ${BGN}yes${CL}"
-    CLOUD_INIT="yes"
-  else
-    echo -e "${CLOUD}${BOLD}${DGN}Configure NoCloud: ${BGN}no${CL}"
-    CLOUD_INIT="no"
-  fi
+  CLOUD_INIT="yes"
+  echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-Init: ${BGN}yes${CL}"
 
   if (whiptail  --title "DOCKER" --yesno "Install Docker and Docker Compose Plugin?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
