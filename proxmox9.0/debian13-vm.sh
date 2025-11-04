@@ -172,6 +172,31 @@ function check_root() {
   fi
 }
 
+function get_storage_base_path() {
+  local storage="$1"
+  local path
+
+  path=$(pvesh get /storage/"$storage" 2>/dev/null | awk -F '"' '/"path":/ {print $4; exit}')
+
+  if [ -z "$path" ] && [ -r /etc/pve/storage.cfg ]; then
+    path=$(awk -v target="$storage" '
+      /^[[:space:]]*[[:alnum:]_.-]+:[[:space:]]*[[:alnum:]_.-]+/ {
+        split($0, parts, ":")
+        storage_name=parts[2]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", storage_name)
+        found=(storage_name==target)
+        next
+      }
+      found && $1=="path" {
+        print $2
+        exit
+      }
+    ' /etc/pve/storage.cfg)
+  fi
+
+  echo "$path"
+}
+
 function setup_nocloud() {
   local VMID="$1"
   local HN="$2"
@@ -224,7 +249,7 @@ EOF
     return 1
   fi
 
-  iso_base=$(pvesm config "$iso_storage" | awk '/^path/ {print $2}')
+  iso_base=$(get_storage_base_path "$iso_storage")
   if [ -z "$iso_base" ]; then
     msg_error "Unable to resolve filesystem path for storage ${iso_storage}"
     return 1
