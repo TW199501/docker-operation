@@ -108,7 +108,7 @@ function cleanup() {
 
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-if whiptail --backtitle "Proxmox VE Helper Scripts" --title "Docker VM" --yesno "This will create a New Docker VM with Debian 13. Proceed?" 10 58; then
+if whiptail --backtitle "Proxmox VE Helper Scripts" --title "Debian 13 VM" --yesno "This will create a New Debian 13 VM. Proceed?" 10 58; then
   :
 else
   header_info && echo -e "${CROSS}${RD}User exited script${CL}\n" && exit
@@ -232,7 +232,15 @@ function default_settings() {
   echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
-  echo -e "${CREATING}${BOLD}${DGN}Creating a Docker VM with Debian 13 using the above default settings${CL}"
+  echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
+
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
+    INSTALL_DOCKER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}no${CL}"
+    INSTALL_DOCKER="no"
+  fi
 }
 
 function advanced_settings() {
@@ -402,6 +410,14 @@ function advanced_settings() {
     exit-script
   fi
 
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
+    INSTALL_DOCKER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}no${CL}"
+    INSTALL_DOCKER="no"
+  fi
+
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
     echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
     START_VM="yes"
@@ -410,8 +426,8 @@ function advanced_settings() {
     START_VM="no"
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Docker VM with Debian 13?" --no-button Do-Over 10 58); then
-    echo -e "${CREATING}${BOLD}${DGN}Creating a Docker VM with Debian 13 using the above advanced settings${CL}"
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Debian 13 VM?" --no-button Do-Over 10 58); then
+    echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above advanced settings${CL}"
   else
     header_info
     echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
@@ -505,16 +521,24 @@ if ! command -v virt-customize &>/dev/null; then
   msg_ok "Installed libguestfs-tools successfully"
 fi
 
-msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
-  virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+if [ "$INSTALL_DOCKER" == "yes" ]; then
+  msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+  msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+else
+  msg_info "Adding QEMU Guest Agent to Debian 13 Qcow2 Disk Image"
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null &&
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+  msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
+fi
 
 msg_info "Expanding root partition to use full disk space"
 qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
@@ -522,9 +546,9 @@ virt-resize --expand /dev/sda1 ${FILE} expanded.qcow2 >/dev/null 2>&1
 mv expanded.qcow2 ${FILE} >/dev/null 2>&1
 msg_ok "Expanded image to full size"
 
-msg_info "Creating a Docker VM"
+msg_info "Creating a Debian 13 VM"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags community-script -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+  -name $HN -tags debian13-vm -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
 qm set $VMID \
@@ -537,41 +561,18 @@ qm set $VMID --agent enabled=1 >/dev/null
 
 DESCRIPTION=$(
   cat <<EOF
-<div align='center'>
-  <a href='https://Helper-Scripts.com' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
-  </a>
-
-  <h2 style='font-size: 24px; margin: 20px 0;'>Docker VM with Debian 13</h2>
-
-  <p style='margin: 16px 0;'>
-    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
-    </a>
-  </p>
-
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
-  </span>
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
-  </span>
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
-  </span>
+<div align='center'>  
+  <h2 style='font-size: 36px; margin: 32px 0;'>Debian 13</h2>
 </div>
 EOF
 )
 qm set "$VMID" -description "$DESCRIPTION" >/dev/null
 
-msg_ok "Created a Docker VM with Debian 13 ${CL}${BL}(${HN})"
+msg_ok "Created a Debian 13 VM ${CL}${BL}(${HN})"
 if [ "$START_VM" == "yes" ]; then
-  msg_info "Starting Docker VM with Debian 13"
+  msg_info "Starting Debian 13 VM"
   qm start $VMID
-  msg_ok "Started Docker VM with Debian 13"
+  msg_ok "Started Debian 13 VM"
 fi
 post_update_to_api "done" "none"
 msg_ok "Completed Successfully!\n"

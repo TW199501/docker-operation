@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 
 # Copyright (c) 2021-2025 community-scripts ORG
-# Author: MickLesk (CanbiZ)
+# Author: thost96 (thost96) | Co-Author: michelroegl-brunner
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
 source /dev/stdin <<<$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
 
-function header_info {
+function header_info() {
   clear
   cat <<"EOF"
-    ____       __    _                ________
-   / __ \___  / /_  (_)___ _____     <  /__  /
-  / / / / _ \/ __ \/ / __ `/ __ \    / / /_ <
- / /_/ /  __/ /_/ / / /_/ / / / /   / /___/ /
-/_____/\___/_.___/_/\__,_/_/ /_/   /_//____/
-                                              (Trixie)
+    ____             __                _    ____  ___
+   / __ \____  _____/ /_____  _____   | |  / /  |/  /
+  / / / / __ \/ ___/ //_/ _ \/ ___/   | | / / /|_/ /
+ / /_/ / /_/ / /__/ ,< /  __/ /       | |/ / /  / /
+/_____/\____/\___/_/|_|\___/_/        |___/_/  /_/
+
 EOF
 }
 header_info
@@ -22,9 +22,10 @@ echo -e "\n Loading..."
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 RANDOM_UUID="$(cat /proc/sys/kernel/random/uuid)"
 METHOD=""
-NSAPP="debian13vm"
+NSAPP="docker-vm"
 var_os="debian"
 var_version="13"
+DISK_SIZE="10G"
 
 YW=$(echo "\033[33m")
 BL=$(echo "\033[36m")
@@ -205,24 +206,24 @@ function default_settings() {
   VMID=$(get_valid_nextid)
   FORMAT=",efitype=4m"
   MACHINE=""
-  DISK_SIZE="8G"
   DISK_CACHE=""
-  HN="debian"
+  DISK_SIZE="10G"
+  HN="docker"
   CPU_TYPE=""
   CORE_COUNT="2"
-  RAM_SIZE="2048"
+  RAM_SIZE="4096"
   BRG="vmbr0"
   MAC="$GEN_MAC"
   VLAN=""
   MTU=""
   START_VM="yes"
-  CLOUD_INIT="no"
   METHOD="default"
   echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
   echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
   echo -e "${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
   echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
+  echo -e "${HOSTNAME}${BOLD}${DGN}OS Version: ${BGN}Debian 13${CL}"
   echo -e "${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
   echo -e "${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
   echo -e "${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
@@ -230,9 +231,16 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}no${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
+
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
+    INSTALL_DOCKER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}no${CL}"
+    INSTALL_DOCKER="no"
+  fi
 }
 
 function advanced_settings() {
@@ -302,9 +310,9 @@ function advanced_settings() {
     exit-script
   fi
 
-  if VM_NAME=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Hostname" 8 58 debian --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if VM_NAME=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Hostname" 8 58 docker --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $VM_NAME ]; then
-      HN="debian"
+      HN="docker"
       echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}$HN${CL}"
     else
       HN=$(echo ${VM_NAME,,} | tr -d ' ')
@@ -313,6 +321,8 @@ function advanced_settings() {
   else
     exit-script
   fi
+
+  echo -e "${HOSTNAME}${BOLD}${DGN}OS Version: ${BGN}Debian 13${CL}"
 
   if CPU_TYPE1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU MODEL" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
     "0" "KVM64 (Default)" ON \
@@ -400,12 +410,12 @@ function advanced_settings() {
     exit-script
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --yesno "Configure the VM with Cloud-init?" --defaultno 10 58); then
-    echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}yes${CL}"
-    CLOUD_INIT="yes"
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
+    INSTALL_DOCKER="yes"
   else
-    echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}no${CL}"
-    CLOUD_INIT="no"
+    echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}no${CL}"
+    INSTALL_DOCKER="no"
   fi
 
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
@@ -436,13 +446,11 @@ function start_script() {
     advanced_settings
   fi
 }
-
 check_root
 arch_check
 pve_check
 ssh_check
 start_script
-
 post_to_api_vm
 
 msg_info "Validating Storage"
@@ -474,11 +482,7 @@ fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
-if [ "$CLOUD_INIT" == "yes" ]; then
-  URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
-else
-  URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-amd64.qcow2
-fi
+URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 curl -f#SL -o "$(basename "$URL")" "$URL"
@@ -486,7 +490,7 @@ echo -en "\e[1A\e[0K"
 FILE=$(basename $URL)
 msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
-STORAGE_TYPE=$(pvesm status -storage $STORAGE | awk 'NR>1 {print $2}')
+STORAGE_TYPE=$(pvesm status -storage "$STORAGE" | awk 'NR>1 {print $2}')
 case $STORAGE_TYPE in
 nfs | dir)
   DISK_EXT=".qcow2"
@@ -508,25 +512,58 @@ for i in {0,1}; do
   eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
 done
 
+if ! command -v virt-customize &>/dev/null; then
+  msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
+  apt-get -qq update >/dev/null
+  apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
+  # Workaround for Proxmox VE 9.0 libguestfs issue
+  apt-get -qq install dhcpcd-base -y >/dev/null 2>&1 || true
+  msg_ok "Installed libguestfs-tools successfully"
+fi
+
+if [ "$INSTALL_DOCKER" == "yes" ]; then
+  msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+  msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+else
+  msg_info "Adding QEMU Guest Agent to Debian 13 Qcow2 Disk Image"
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null &&
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+  msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
+fi
+
+msg_info "Expanding root partition to use full disk space"
+qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
+virt-resize --expand /dev/sda1 ${FILE} expanded.qcow2 >/dev/null 2>&1
+mv expanded.qcow2 ${FILE} >/dev/null 2>&1
+msg_ok "Expanded image to full size"
+
 msg_info "Creating a Debian 13 VM"
+if [ "$INSTALL_DOCKER" == "yes" ]; then
+  VM_TAG="debian13-docker"
+else
+  VM_TAG="debian13"
+fi
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags community-script -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+  -name $HN -tags $VM_TAG -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
-if [ "$CLOUD_INIT" == "yes" ]; then
-  qm set $VMID \
-    -efidisk0 ${DISK0_REF}${FORMAT} \
-    -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -scsi1 ${STORAGE}:cloudinit \
-    -boot order=scsi0 \
-    -serial0 socket >/dev/null
-else
-  qm set $VMID \
-    -efidisk0 ${DISK0_REF}${FORMAT} \
-    -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -boot order=scsi0 \
-    -serial0 socket >/dev/null
-fi
+qm set $VMID \
+  -efidisk0 ${DISK0_REF}${FORMAT} \
+  -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
+  -boot order=scsi0 \
+  -serial0 socket >/dev/null
+qm resize $VMID scsi0 8G >/dev/null
+qm set $VMID --agent enabled=1 >/dev/null
+
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
@@ -534,7 +571,7 @@ DESCRIPTION=$(
     <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>Debian VM</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>Debian 13 VM</h2>
 
   <p style='margin: 16px 0;'>
     <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
@@ -558,13 +595,6 @@ DESCRIPTION=$(
 EOF
 )
 qm set "$VMID" -description "$DESCRIPTION" >/dev/null
-if [ -n "$DISK_SIZE" ]; then
-  msg_info "Resizing disk to $DISK_SIZE GB"
-  qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
-else
-  msg_info "Using default disk size of $DEFAULT_DISK_SIZE GB"
-  qm resize $VMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
-fi
 
 msg_ok "Created a Debian 13 VM ${CL}${BL}(${HN})"
 if [ "$START_VM" == "yes" ]; then
@@ -572,6 +602,5 @@ if [ "$START_VM" == "yes" ]; then
   qm start $VMID
   msg_ok "Started Debian 13 VM"
 fi
-
+post_update_to_api "done" "none"
 msg_ok "Completed Successfully!\n"
-echo "More Info at https://github.com/community-scripts/ProxmoxVE/discussions/836"
