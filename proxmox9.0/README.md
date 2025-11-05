@@ -45,7 +45,11 @@ flowchart TD
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"
 ```
 
-2. 執行安裝 SSH
+```
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-tool.sh)"
+```
+
+3. 執行安裝 SSH
 
 ```bash
 sudo apt update && sudo apt install -y openssh-client openssh-server

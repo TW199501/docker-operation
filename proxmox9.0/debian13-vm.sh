@@ -540,21 +540,24 @@ else
   msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
 fi
 
-msg_info "Expanding root partition to use full disk space"
-qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
-# 使用更可靠的分區檢測方法
-PARTITIONS=$(virt-filesystems -a ${FILE} --partitions --human-readable 2>/dev/null | grep '/dev/sda' | sort -k3 -h | tail -1 | awk '{print $1}')
-if [ -n "$PARTITIONS" ]; then
-  # 嘗試擴展檢測到的最大分區
-  virt-resize --expand $PARTITIONS ${FILE} expanded.qcow2 >/dev/null 2>&1 || \
-    # 如果擴展失敗，嘗試不指定分區的擴展
-    virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
-else
-  # 如果沒有檢測到分區，直接擴展整個磁碟
-  virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
-fi
-mv expanded.qcow2 ${FILE} >/dev/null 2>&1
-msg_ok "Expanded image to full size"
+# msg_info "Expanding root partition to use full disk space"
+# qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
+# # 使用更可靠的分區檢測方法
+# PARTITIONS=$(virt-filesystems -a ${FILE} --partitions --human-readable 2>/dev/null | grep '/dev/sda' | sort -k3 -h | tail -1 | awk '{print $1}')
+# if [ -n "$PARTITIONS" ]; then
+#   # 嘗試擴展檢測到的最大分區
+#   virt-resize --expand $PARTITIONS ${FILE} expanded.qcow2 >/dev/null 2>&1 || \
+#     # 如果擴展失敗，嘗試不指定分區的擴展
+#     virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
+# else
+#   # 如果沒有檢測到分區，直接擴展整個磁碟
+#   virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
+# fi
+# mv expanded.qcow2 ${FILE} >/dev/null 2>&1
+# msg_ok "Expanded image to full size"
+
+# 臨時跳過磁碟擴展，虛擬機仍可正常啟動
+# 稍後會通過獨立腳本進行磁碟擴展
 
 msg_info "Creating a Debian 13 VM"
 if [ "$INSTALL_DOCKER" == "yes" ]; then
