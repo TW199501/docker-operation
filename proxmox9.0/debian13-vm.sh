@@ -542,7 +542,14 @@ fi
 
 msg_info "Expanding root partition to use full disk space"
 qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
-virt-resize --expand /dev/sda3 ${FILE} expanded.qcow2 >/dev/null 2>&1
+# 檢查鏡像的分區結構並選擇最大的分區進行擴展
+ROOT_PARTITION=$(virt-filesystems -a ${FILE} --partitions | awk '{print $1}' | grep -E '/dev/sda[0-9]+' | head -1)
+if [ -n "$ROOT_PARTITION" ]; then
+  virt-resize --expand $ROOT_PARTITION ${FILE} expanded.qcow2 >/dev/null 2>&1 || \
+    virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
+else
+  virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
+fi
 mv expanded.qcow2 ${FILE} >/dev/null 2>&1
 msg_ok "Expanded image to full size"
 
@@ -567,26 +574,13 @@ qm set $VMID --agent enabled=1 >/dev/null
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
-  <a href='https://Helper-Scripts.com' target='_blank' rel='noopener noreferrer'>
+  
     <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
-  </a>
-
+  
   <h2 style='font-size: 24px; margin: 20px 0;'>Debian 13 VM</h2>
-
   <p style='margin: 16px 0;'>
-    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
-    </a>
+      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />    
   </p>
-
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
-  </span>
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
-  </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
     <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
