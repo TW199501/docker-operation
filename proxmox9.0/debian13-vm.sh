@@ -214,9 +214,22 @@ EOF
   # 生成 user-data
   cat > nocloud/user-data <<EOF
 #cloud-config
-user: debian
-password: debian
-chpasswd: { expire: False }
+users:
+  - default
+  - name: debian
+    gecos: Debian User
+    groups: sudo
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+  - name: root
+    lock_passwd: false
+chpasswd:
+  list: |
+    debian:debian
+    root:debian
+  expire: False
+  encrypted: false
 ssh_pwauth: True
 package_update: true
 package_upgrade: true
