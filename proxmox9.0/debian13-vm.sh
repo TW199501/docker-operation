@@ -569,6 +569,9 @@ function default_settings() {
   echo -e "${DEFAULT}${BOLD}${DGN} Interface MTU Size: ${BGN}Default${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
+  
+  # 獲取靜態IP配置
+  get_static_ip_config
 
   if (whiptail --title "DOCKER" --yesno "Install Docker and Docker Compose Plugin?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN} Install Docker: ${BGN}yes${CL}"
