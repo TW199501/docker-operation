@@ -542,12 +542,15 @@ fi
 
 msg_info "Expanding root partition to use full disk space"
 qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
-# 檢查鏡像的分區結構並選擇最大的分區進行擴展
-ROOT_PARTITION=$(virt-filesystems -a ${FILE} --partitions | awk '{print $1}' | grep -E '/dev/sda[0-9]+' | head -1)
-if [ -n "$ROOT_PARTITION" ]; then
-  virt-resize --expand $ROOT_PARTITION ${FILE} expanded.qcow2 >/dev/null 2>&1 || \
+# 使用更可靠的分區檢測方法
+PARTITIONS=$(virt-filesystems -a ${FILE} --partitions --human-readable 2>/dev/null | grep '/dev/sda' | sort -k3 -h | tail -1 | awk '{print $1}')
+if [ -n "$PARTITIONS" ]; then
+  # 嘗試擴展檢測到的最大分區
+  virt-resize --expand $PARTITIONS ${FILE} expanded.qcow2 >/dev/null 2>&1 || \
+    # 如果擴展失敗，嘗試不指定分區的擴展
     virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
 else
+  # 如果沒有檢測到分區，直接擴展整個磁碟
   virt-resize ${FILE} expanded.qcow2 >/dev/null 2>&1
 fi
 mv expanded.qcow2 ${FILE} >/dev/null 2>&1

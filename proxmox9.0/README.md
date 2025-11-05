@@ -59,6 +59,6 @@ systemctl restart sshd
 
 ```bash
 sudo apt update && sudo apt install -y cloud-guest-utils
-sudo growpart /dev/sda 1
-sudo resize2fs /dev/sda1
+sudo growpart /dev/sda 3
+sudo resize2fs /dev/sda3
 ```
