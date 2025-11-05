@@ -33,6 +33,12 @@ check_dependencies
 
 INSTALL_DOCKER="no"
 ROOT_PASSWORD=""
+STATIC_IP_CONFIG="no"
+IP_ADDRESS=""
+NETMASK="24"
+CIDR_NETMASK="24"
+GATEWAY=""
+DNS_SERVERS=""
 
 echo -e "\n Loading..."
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -233,6 +239,42 @@ package_upgrade: true
 packages:
   - openssh-server
   - cloud-guest-utils
+  - netplan.io
+  - systemd-networkd
+  - network-manager
+EOF
+
+  # 根據靜態IP配置選擇添加相應的網絡配置
+  if [ "$STATIC_IP_CONFIG" == "yes" ]; then
+    # 生成靜態IP網絡配置
+    cat >> nocloud/user-data <<EOF
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: false
+      addresses:
+        - ${IP_ADDRESS}/${CIDR_NETMASK}
+      gateway4: ${GATEWAY}
+      nameservers:
+        addresses: [$(echo ${DNS_SERVERS} | tr ',' ' ')]
+      optional: true
+EOF
+  else
+    # 生成DHCP網絡配置
+    cat >> nocloud/user-data <<EOF
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp6: true
+      optional: true
+EOF
+  fi
+
+  # 添加剩餘的配置
+  cat >> nocloud/user-data <<EOF
 runcmd:
   - systemctl enable serial-getty@ttyS0.service
   - systemctl start serial-getty@ttyS0.service
@@ -240,6 +282,7 @@ runcmd:
   - systemctl restart sshd
   - growpart /dev/sda 1 || growpart /dev/vda 1
   - resize2fs /dev/sda1 || resize2fs /dev/vda1
+  - netplan apply || true
 EOF
 
   # 添加 SSH 密鑰（如果存在）
@@ -400,6 +443,94 @@ function get_root_password() {
   done
 }
 
+function get_static_ip_config() {
+  if (whiptail --title "STATIC IP CONFIGURATION" --yesno "Do you want to configure static IP address?" 10 58); then
+    while true; do
+      if IP_ADDRESS=$(whiptail --inputbox "Enter IP address (e.g., 192.168.1.100):" 8 58 --title "IP ADDRESS" 3>&1 1>&2 2>&3); then
+        if [ -z "$IP_ADDRESS" ]; then
+          whiptail --msgbox "IP address cannot be empty!" 8 58
+          continue
+        fi
+        break
+      else
+        exit-script
+      fi
+    done
+    
+    while true; do
+      if NETMASK=$(whiptail --inputbox "Enter netmask (e.g., 255.255.255.0 or 24):" 8 58 --title "NETMASK" 3>&1 1>&2 2>&3); then
+        if [ -z "$NETMASK" ]; then
+          whiptail --msgbox "Netmask cannot be empty!" 8 58
+          continue
+        fi
+        # 預先轉換CIDR表示法
+        CIDR_NETMASK=$(mask_to_cidr "$NETMASK")
+        break
+      else
+        exit-script
+      fi
+    done
+    
+    while true; do
+      if GATEWAY=$(whiptail --inputbox "Enter gateway (e.g., 192.168.1.1):" 8 58 --title "GATEWAY" 3>&1 1>&2 2>&3); then
+        if [ -z "$GATEWAY" ]; then
+          whiptail --msgbox "Gateway cannot be empty!" 8 58
+          continue
+        fi
+        break
+      else
+        exit-script
+      fi
+    done
+    
+    while true; do
+      if DNS_SERVERS=$(whiptail --inputbox "Enter DNS servers (comma separated, e.g., 8.8.8.8,8.8.4.4):" 8 58 --title "DNS SERVERS" 3>&1 1>&2 2>&3); then
+        if [ -z "$DNS_SERVERS" ]; then
+          whiptail --msgbox "DNS servers cannot be empty!" 8 58
+          continue
+        fi
+        break
+      else
+        exit-script
+      fi
+    done
+    
+    STATIC_IP_CONFIG="yes"
+  else
+    STATIC_IP_CONFIG="no"
+  fi
+}
+
+function mask_to_cidr() {
+  local mask="$1"
+  case "$mask" in
+    255.255.255.252) echo "30" ;;
+    255.255.255.248) echo "29" ;;
+    255.255.255.240) echo "28" ;;
+    255.255.255.224) echo "27" ;;
+    255.255.255.192) echo "26" ;;
+    255.255.255.128) echo "25" ;;
+    255.255.255.0) echo "24" ;;
+    255.255.254.0) echo "23" ;;
+    255.255.252.0) echo "22" ;;
+    255.255.248.0) echo "21" ;;
+    255.255.240.0) echo "20" ;;
+    255.255.224.0) echo "19" ;;
+    255.255.192.0) echo "18" ;;
+    255.255.128.0) echo "17" ;;
+    255.255.0.0) echo "16" ;;
+    255.254.0.0) echo "15" ;;
+    255.252.0.0) echo "14" ;;
+    255.248.0.0) echo "13" ;;
+    255.240.0.0) echo "12" ;;
+    255.224.0.0) echo "11" ;;
+    255.192.0.0) echo "10" ;;
+    255.128.0.0) echo "9" ;;
+    255.0.0.0) echo "8" ;;
+    *) echo "$mask" ;;  # 如果已經是CIDR格式，直接返回
+  esac
+}
+
 function default_settings() {
   VMID=$(get_valid_nextid)
   FORMAT=",efitype=4m"
@@ -415,11 +546,14 @@ function default_settings() {
   VLAN=""
   MTU=""
   START_VM="yes"
-  CLOUD_INIT="yes"
   METHOD="default"
+  STATIC_IP_CONFIG="no"
   
   # 獲取root密碼
   get_root_password
+  
+  # 獲取靜態IP配置
+  get_static_ip_config
   
   echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
@@ -433,7 +567,6 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN} VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN} Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${CLOUD}${BOLD}${DGN} Configure Cloud-Init: ${BGN}yes${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
 
@@ -468,6 +601,9 @@ function advanced_settings() {
   
   # 獲取root密碼
   get_root_password
+  
+  # 獲取靜態IP配置
+  get_static_ip_config
 
 
   if MACH=$(whiptail  --title "MACHINE TYPE" --radiolist --cancel-button Exit-Script "Choose Type" 10 58 2 \
@@ -615,8 +751,6 @@ function advanced_settings() {
     exit-script
   fi
 
-  CLOUD_INIT="yes"
-  echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-Init: ${BGN}yes${CL}"
 
   if (whiptail  --title "DOCKER" --yesno "Install Docker and Docker Compose Plugin?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
@@ -690,11 +824,8 @@ fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
-if [ "$CLOUD_INIT" == "yes" ]; then
-  URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
-else
-  URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-amd64.qcow2
-fi
+# 統一使用genericcloud鏡像，因為我們的腳本依賴雲初始化配置
+URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 # 下載鏡像文件，最多重試3次
