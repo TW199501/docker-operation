@@ -32,6 +32,7 @@ fi
 check_dependencies
 
 INSTALL_DOCKER="no"
+ROOT_PASSWORD=""
 
 echo -e "\n Loading..."
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -202,6 +203,12 @@ function setup_nocloud() {
   local HN="$2"
   local iso_storage iso_name iso_dir iso_path
 
+  # 檢查是否設置了root密碼
+  if [ -z "$ROOT_PASSWORD" ]; then
+    msg_error "Root password not set!"
+    return 1
+  fi
+
   # 創建 NoCloud 配置目錄
   mkdir -p nocloud
 
@@ -215,24 +222,24 @@ EOF
   cat > nocloud/user-data <<EOF
 #cloud-config
 users:
-  - default
-  - name: debian
-    gecos: Debian User
-    groups: sudo
-    lock_passwd: false
-    shell: /bin/bash
-    sudo: ALL=(ALL) NOPASSWD:ALL
   - name: root
     lock_passwd: false
 chpasswd:
   list: |
-    debian:debian
-    root:debian
+    root:${ROOT_PASSWORD}
   expire: False
-  encrypted: false
-ssh_pwauth: True
 package_update: true
 package_upgrade: true
+packages:
+  - openssh-server
+  - cloud-guest-utils
+runcmd:
+  - systemctl enable serial-getty@ttyS0.service
+  - systemctl start serial-getty@ttyS0.service
+  - sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+  - systemctl restart sshd
+  - growpart /dev/sda 1 || growpart /dev/vda 1
+  - resize2fs /dev/sda1 || resize2fs /dev/vda1
 EOF
 
   # 添加 SSH 密鑰（如果存在）
@@ -367,6 +374,32 @@ function exit-script() {
   exit
 }
 
+function get_root_password() {
+  local password
+  while true; do
+    if password=$(whiptail --passwordbox "Enter root password for the VM:" 8 58 --title "ROOT PASSWORD" 3>&1 1>&2 2>&3); then
+      if [ -z "$password" ]; then
+        whiptail --msgbox "Password cannot be empty!" 8 58
+        continue
+      fi
+      
+      local confirm_password
+      if confirm_password=$(whiptail --passwordbox "Confirm root password:" 8 58 --title "CONFIRM PASSWORD" 3>&1 1>&2 2>&3); then
+        if [ "$password" = "$confirm_password" ]; then
+          ROOT_PASSWORD="$password"
+          break
+        else
+          whiptail --msgbox "Passwords do not match!" 8 58
+        fi
+      else
+        exit-script
+      fi
+    else
+      exit-script
+    fi
+  done
+}
+
 function default_settings() {
   VMID=$(get_valid_nextid)
   FORMAT=",efitype=4m"
@@ -384,6 +417,10 @@ function default_settings() {
   START_VM="yes"
   CLOUD_INIT="yes"
   METHOD="default"
+  
+  # 獲取root密碼
+  get_root_password
+  
   echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
   echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
@@ -428,6 +465,10 @@ function advanced_settings() {
       exit-script
     fi
   done
+  
+  # 獲取root密碼
+  get_root_password
+
 
   if MACH=$(whiptail  --title "MACHINE TYPE" --radiolist --cancel-button Exit-Script "Choose Type" 10 58 2 \
     "i440fx" "Machine i440fx" ON \
@@ -748,6 +789,7 @@ if [ -n "$DISK_SIZE" ]; then
   msg_info "Resizing disk to $DISK_SIZE GB"
   qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
 else
+  DEFAULT_DISK_SIZE="10G"
   msg_info "Using default disk size of $DEFAULT_DISK_SIZE GB"
   qm resize $VMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
 fi

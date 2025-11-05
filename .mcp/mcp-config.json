@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", ""],
+      "command": "npx",
+      "disabled": false,
+      "env": {}
+    },
+    "mcp-playwright": {
+      "args": ["-y", "@playwright/mcp@latest"],
+      "command": "npx",
+      "disabled": false,
+      "env": {}
+    },
+    "memory": {
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "command": "npx",
+      "disabled": false,
+      "env": {
+        "MEMORY_FILE_PATH": "d:/appdocker-operation/.mcp/memory.json"
+      }
+    },
+    "puppeteer": {
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "command": "npx",
+      "disabled": false,
+      "env": {}
+    }
+  }
+}
