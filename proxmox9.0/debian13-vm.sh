@@ -542,7 +542,7 @@ fi
 
 msg_info "Expanding root partition to use full disk space"
 qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
-virt-resize --expand /dev/sda1 ${FILE} expanded.qcow2 >/dev/null 2>&1
+virt-resize --expand /dev/sda3 ${FILE} expanded.qcow2 >/dev/null 2>&1
 mv expanded.qcow2 ${FILE} >/dev/null 2>&1
 msg_ok "Expanded image to full size"
 
