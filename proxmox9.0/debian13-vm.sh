@@ -55,8 +55,6 @@ BGN=$(echo "\033[4;92m")
 GN=$(echo "\033[1;92m")
 DGN=$(echo "\033[32m")
 CL=$(echo "\033[m")
-
-CL=$(echo "\033[m")
 BOLD=$(echo "\033[1m")
 BFR="\\r\\033[K"
 HOLD=" "
@@ -549,12 +547,6 @@ function default_settings() {
   METHOD="default"
   STATIC_IP_CONFIG="no"
   
-  # 獲取root密碼
-  get_root_password
-  
-  # 獲取靜態IP配置
-  get_static_ip_config
-  
   echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
   echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
@@ -569,9 +561,6 @@ function default_settings() {
   echo -e "${DEFAULT}${BOLD}${DGN} Interface MTU Size: ${BGN}Default${CL}"
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
-  
-  # 獲取靜態IP配置
-  get_static_ip_config
 
   if (whiptail --title "DOCKER" --yesno "Install Docker and Docker Compose Plugin?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN} Install Docker: ${BGN}yes${CL}"
@@ -601,13 +590,6 @@ function advanced_settings() {
       exit-script
     fi
   done
-  
-  # 獲取root密碼
-  get_root_password
-  
-  # 獲取靜態IP配置
-  get_static_ip_config
-
 
   if MACH=$(whiptail  --title "MACHINE TYPE" --radiolist --cancel-button Exit-Script "Choose Type" 10 58 2 \
     "i440fx" "Machine i440fx" ON \
@@ -790,6 +772,10 @@ function start_script() {
     echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
     advanced_settings
   fi
+  # 獲取root密碼
+  get_root_password
+  # 獲取靜態IP配置
+  get_static_ip_config
 }
 
 check_root
