@@ -42,7 +42,7 @@ flowchart TD
 1. 下載安裝腳本
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-docker-vm)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-docker-vm.sh)"
 ```
 
 2. 執行安裝 SSH
