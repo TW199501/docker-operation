@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 
 # Debian 13 VM 工具腳本
-# 功能：設置 root 密碼、配置網絡和擴展硬碟空間
+# 功能：
+#   1) 設置 root 密碼 + 啟用 SSH（允許 root 密碼登入）
+#   2) 配置固定 IP（只輸入最後一碼；自動偵測網段與 gateway；含衝突檢查）
+#   3) 禁用 IPv6（只問一次；使用 sysctl 持久化）
+#   4) 優化大檔處理（sysctl）
+#   5) 擴展硬碟（支援傳統分割區與常見 LVM 佈署）
+#   6) 優化網路傳輸（BBR/fq、socket buffer、TFO、txqueuelen、GRO/GSO/TSO）
+# 注意：
+#   - 本腳本假設「未使用 VLAN」，PVE 以 vmbr0 ⇄ eno1 橋接至 LAN。
+#   - 請用 Bash 執行；若誤用 sh，腳本會自動以 bash 重新啟動。
 
 # 設置大文件處理優化
 ulimit -n 65536 2>/dev/null || true
@@ -291,52 +300,201 @@ EOF
 function optimize_for_large_files() {
   msg_info "正在優化系統以處理大文件..."
   
-  # 調整內核參數以更好地處理大文件
-  echo 'vm.dirty_ratio = 5' >> /etc/sysctl.conf 2>/dev/null || true
-  echo 'vm.dirty_background_ratio = 2' >> /etc/sysctl.conf 2>/dev/null || true
-  echo 'vm.swappiness = 10' >> /etc/sysctl.conf 2>/dev/null || true
+  # 創建專用的 sysctl 配置文件
+  local f=/etc/sysctl.d/99-io-tuning.conf
+  mkdir -p /etc/sysctl.d
+  
+  # 寫入優化參數
+  cat >"$f" <<'EOF'
+vm.dirty_ratio = 5
+vm.dirty_background_ratio = 2
+vm.swappiness = 10
+EOF
   
   # 應用內核參數
-  sysctl -p >/dev/null 2>&1 || true
+  sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
   
-  msg_ok "✓ 系統優化完成"
+  msg_ok "✓ 系統大文件處理優化完成"
+  msg_info "配置文件: $f"
 }
 
 # 擴展硬碟空間
 function expand_disk() {
   msg_info "正在擴展硬碟空間..."
   
-  # 優化系統以處理大文件操作
-  optimize_for_large_files
-  
   # 安裝必要的工具
-  apt update && apt install -y cloud-guest-utils
+  apt update && apt install -y cloud-guest-utils lvm2 xfsprogs btrfs-progs
   
-  # 檢查分區
-  msg_info "檢查磁碟分區..."
-  lsblk
+  # 獲取根設備和文件系統類型
+  local rootdev fstype
+  rootdev=$(findmnt -no SOURCE /)
+  fstype=$(findmnt -no FSTYPE /)
   
-  # 嘗試擴展 sda3 分區
-  if growpart /dev/sda 3 2>/dev/null; then
-    msg_ok "✓ 分區擴展成功"
-    resize2fs /dev/sda3
-    msg_ok "✓ 文件系統調整完成"
-  else
-    # 如果 sda3 失敗，嘗試 sda1
-    msg_info "嘗試擴展 sda1 分區..."
-    if growpart /dev/sda 1 2>/dev/null; then
+  msg_info "根設備: $rootdev"
+  msg_info "文件系統: $fstype"
+  
+  # 檢查是否為 LVM
+  if [[ "$rootdev" =~ ^/dev/mapper/.+ ]]; then
+    # LVM 處理
+    msg_info "檢測到 LVM 配置，正在處理..."
+    
+    local lv pv disk part
+    lv="$rootdev"
+    pv=$(pvs --noheadings -o pv_name 2>/dev/null | awk 'NF{print $1; exit}')
+    
+    if [ -z "${pv:-}" ]; then
+      msg_error "✗ 找不到 PV，可能非 LVM 或需手動處理"
+      return 1
+    fi
+    
+    # 解析磁碟和分區
+    if [[ "$pv" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then 
+      disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    elif [[ "$pv" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then 
+      disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    else 
+      msg_error "✗ 無法解析 PV: $pv"
+      return 1
+    fi
+    
+    msg_info "正在擴展分區: $disk 第 $part 分區"
+    
+    # 執行 LVM 擴展
+    if growpart "$disk" "$part"; then
       msg_ok "✓ 分區擴展成功"
-      resize2fs /dev/sda1
-      msg_ok "✓ 文件系統調整完成"
+      
+      if pvresize "$pv"; then
+        msg_ok "✓ PV 重新調整大小成功"
+        
+        if lvextend -r -l +100%FREE "$lv"; then
+          msg_ok "✓ LV 擴展成功"
+          df -h /
+          msg_ok "✓ LVM 硬碟擴展完成"
+          return 0
+        else
+          msg_error "✗ LV 擴展失敗"
+          return 1
+        fi
+      else
+        msg_error "✗ PV 重新調整大小失敗"
+        return 1
+      fi
     else
-      msg_error "✗ 無法擴展分區，請手動檢查分區結構"
+      msg_error "✗ 分區擴展失敗"
+      return 1
+    fi
+  else
+    # 非 LVM 處理
+    msg_info "檢測到傳統分區，正在處理..."
+    
+    local disk part
+    if [[ "$rootdev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then 
+      disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    elif [[ "$rootdev" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then 
+      disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    else 
+      msg_error "✗ 不支援的根設備: $rootdev"
+      return 1
+    fi
+    
+    msg_info "正在擴展分區: $disk 第 $part 分區"
+    
+    if growpart "$disk" "$part"; then
+      msg_ok "✓ 分區擴展成功"
+      
+      # 根據文件系統類型調整大小
+      case "$fstype" in
+        ext2|ext3|ext4) 
+          msg_info "正在調整 ext 文件系統..."
+          resize2fs "$rootdev"
+          ;;
+        xfs) 
+          msg_info "正在調整 XFS 文件系統..."
+          xfs_growfs -d /
+          ;;
+        btrfs) 
+          msg_info "正在調整 Btrfs 文件系統..."
+          btrfs filesystem resize max /
+          ;;
+        *) 
+          msg_error "✗ 不支援的文件系統: $fstype"
+          return 1
+          ;;
+      esac
+      
+      msg_ok "✓ 文件系統調整完成"
+      df -h /
+      msg_ok "✓ 硬碟擴展完成"
+    else
+      msg_error "✗ 分區擴展失敗"
       return 1
     fi
   fi
+}
+
+# 優化網路傳輸
+function optimize_network_stack() {
+  msg_info "正在優化網路傳輸參數..."
   
-  # 顯示最終磁碟使用情況
-  df -h
-  msg_ok "✓ 硬碟擴展完成"
+  # 創建網路優化配置文件
+  local f=/etc/sysctl.d/99-net-opt.conf
+  mkdir -p /etc/sysctl.d
+  
+  # 檢測是否支援 BBR
+  local cc="cubic"
+  if sysctl net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -qw bbr; then 
+    cc="bbr"
+    msg_info "檢測到 BBR 支援，將使用 BBR 擁塞控制"
+  else
+    msg_info "使用默認擁塞控制: cubic"
+  fi
+  
+  # 寫入網路優化參數
+  cat >"$f" <<EOF
+# 網路優化參數
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = $cc
+net.core.somaxconn = 16384
+net.core.netdev_max_backlog = 32768
+net.ipv4.tcp_max_syn_backlog = 8192
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_mtu_probing = 1
+net.core.rmem_default = 1048576
+net.core.wmem_default = 1048576
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+net.ipv4.tcp_rmem = 4096 1048576 67108864
+net.ipv4.tcp_wmem = 4096 1048576 67108864
+net.ipv4.ip_forward = 1
+EOF
+  
+  # 應用網路參數
+  sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
+  
+  msg_ok "✓ 網路參數優化完成"
+  
+  # 網路介面層優化
+  local iface
+  iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
+  
+  if [ -n "${iface:-}" ]; then
+    msg_info "正在優化網路介面: $iface"
+    
+    # 安裝 ethtool（如果可用）
+    apt install -y ethtool >/dev/null 2>&1 || true
+    
+    # 調整介面參數
+    ip link set dev "$iface" txqueuelen 10000 2>/dev/null || true
+    ethtool -K "$iface" gro on gso on tso on >/dev/null 2>&1 || true
+    ethtool -G "$iface" rx 4096 tx 4096 >/dev/null 2>&1 || true
+    
+    msg_ok "✓ 網路介面優化完成"
+  else
+    msg_info "找不到預設路由介面，跳過介面層調整"
+  fi
+  
+  msg_info "網路優化配置文件: $f"
 }
 
 # 主程序
@@ -395,6 +553,16 @@ function main() {
     expand_disk
   else
     msg_info "跳過硬碟擴展"
+  fi
+  
+  # 詢問是否優化網路傳輸
+  echo -e "\n${YW}${BOLD}6. 優化網路傳輸${CL}"
+  read -p "是否要優化網路傳輸參數 (BBR, socket buffer 等)? (y/N): " OPTIMIZE_NETWORK
+  
+  if [[ "$OPTIMIZE_NETWORK" =~ ^[Yy]$ ]]; then
+    optimize_network_stack
+  else
+    msg_info "跳過網路傳輸優化"
   fi
   
   msg_ok "\n=== 所有操作完成 ==="

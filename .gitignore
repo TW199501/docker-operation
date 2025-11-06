@@ -5,8 +5,7 @@
 .env
 !.env.example
 
-.vscode/
-.continue/
+# .continue/
 .codebuddy
 
 
