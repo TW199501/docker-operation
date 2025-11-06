@@ -4,7 +4,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/10-build-nginx.sh)"
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/15-modsecurity-nginx.sh)"
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/30-keepalived-install.sh)"
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/update_geoip2_cf_ip..sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/a87-unified-nginx-network.sh)"
 ```
 
 # 安裝並啟用
