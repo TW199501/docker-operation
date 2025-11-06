@@ -130,23 +130,27 @@ function configure_ssh() {
 # 關閉 IPv6 功能
 function disable_ipv6() {
   msg_info "正在關閉 IPv6 功能..."
-  
+
   # 檢查是否已經禁用 IPv6
-  if [ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null)" = "1" ]; then
+  if [ -f "/proc/sys/net/ipv6/conf/all/disable_ipv6" ] && [ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null)" = "1" ]; then
     msg_info "IPv6 已經被禁用"
     return 0
   fi
-  
+
   # 臨時禁用 IPv6
-  echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
-  echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
-  
+  if [ -f "/proc/sys/net/ipv6/conf/all/disable_ipv6" ]; then
+    echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+  fi
+  if [ -f "/proc/sys/net/ipv6/conf/default/disable_ipv6" ]; then
+    echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+  fi
+
   # 永久禁用 IPv6
   # 備份原始配置
   if [ -f /etc/default/grub ]; then
     cp /etc/default/grub /etc/default/grub.backup
   fi
-  
+
   # 添加 grub 參數
   if grep -q "GRUB_CMDLINE_LINUX=" /etc/default/grub; then
     # 檢查是否已經有 ipv6.disable=1 參數
@@ -156,14 +160,14 @@ function disable_ipv6() {
   else
     echo 'GRUB_CMDLINE_LINUX="ipv6.disable=1"' >> /etc/default/grub
   fi
-  
+
   # 更新 grub 配置
   if command -v update-grub &>/dev/null; then
     update-grub >/dev/null 2>&1
   elif command -v grub-mkconfig &>/dev/null; then
     grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
   fi
-  
+
   msg_ok "✓ IPv6 功能已禁用"
   msg_info "系統重啟後將永久生效"
 }
@@ -171,23 +175,23 @@ function disable_ipv6() {
 # 配置固定IP地址
 function configure_static_ip() {
   msg_info "正在配置固定IP地址..."
-  
+
   # 詢問是否同時禁用 IPv6
   read -p "是否在配置固定IP時禁用 IPv6? (y/N): " DISABLE_IPV6
   if [[ "$DISABLE_IPV6" =~ ^[Yy]$ ]]; then
     disable_ipv6
   fi
-  
+
   # 獲取當前網絡接口
   INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
   if [ -z "$INTERFACE" ]; then
     INTERFACE="eth0"  # 默認接口名
   fi
-  
+
   # 顯示當前網絡配置
   msg_info "當前網絡接口: $INTERFACE"
   ip addr show $INTERFACE
-  
+
   # 輸入固定IP地址
   while true; do
     read -p "請輸入固定IP地址 (例如: 192.168.1.100): " STATIC_IP
@@ -204,18 +208,47 @@ function configure_static_ip() {
       msg_error "✗ IP地址不能為空"
     fi
   done
-  
-  # 自動計算子網掩碼和網關
-  IFS='.' read -r ip1 ip2 ip3 ip4 <<< "$STATIC_IP"
+
+  # 自動計算子網掩碼
   SUBNET_MASK="255.255.255.0"  # 默認子網掩碼
-  GATEWAY="$ip1.$ip2.$ip3.1"    # 默認網關
   DNS="8.8.8.8"                # 默認DNS
-  
+
+  # 嘗試自動檢測網關
+  CURRENT_GATEWAY=$(ip route | grep default | awk '{print $3}' | head -1)
+  if [ -n "$CURRENT_GATEWAY" ]; then
+    msg_info "檢測到當前網關: $CURRENT_GATEWAY"
+    read -p "是否使用此網關? (Y/n): " USE_DETECTED_GATEWAY
+    if [[ "$USE_DETECTED_GATEWAY" =~ ^[Nn]$ ]]; then
+      CURRENT_GATEWAY=""
+    fi
+  fi
+
+  # 如果沒有檢測到網關或用戶選擇不使用，讓用戶手動輸入
+  if [ -z "$CURRENT_GATEWAY" ]; then
+    while true; do
+      read -p "請輸入網關地址 (例如: 192.168.25.254): " GATEWAY
+      if [ -n "$GATEWAY" ]; then
+        # 驗證網關IP地址格式
+        if [[ $GATEWAY =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+          IFS='.' read -r g1 g2 g3 g4 <<< "$GATEWAY"
+          if [[ $g1 -le 255 && $g2 -le 255 && $g3 -le 255 && $g4 -le 255 ]]; then
+            break
+          fi
+        fi
+        msg_error "✗ 網關地址格式無效，請重新輸入"
+      else
+        msg_error "✗ 網關地址不能為空"
+      fi
+    done
+  else
+    GATEWAY="$CURRENT_GATEWAY"
+  fi
+
   # 備份原始網絡配置
   if [ -f /etc/network/interfaces ]; then
     cp /etc/network/interfaces /etc/network/interfaces.backup
   fi
-  
+
   # 配置網絡接口
   cat > /etc/network/interfaces <<EOF
 # Loopback network interface
@@ -230,15 +263,24 @@ iface $INTERFACE inet static
     gateway $GATEWAY
     dns-nameservers $DNS
 EOF
-  
+
   # 重啟網絡服務
   msg_info "正在重啟網絡服務..."
-  systemctl restart networking
-  
+  if systemctl restart networking 2>/dev/null; then
+    msg_ok "✓ 網絡服務重啟成功"
+  else
+    msg_info "正在嘗試其他網絡服務重啟方法..."
+    if /etc/init.d/networking restart 2>/dev/null; then
+      msg_ok "✓ 網絡服務重啟成功"
+    else
+      msg_info "請手動重啟系統以應用網絡配置"
+    fi
+  fi
+
   # 顯示新配置
   msg_info "新的網絡配置:"
   ip addr show $INTERFACE
-  
+
   msg_ok "✓ 固定IP地址配置完成"
   msg_info "IP地址: $STATIC_IP"
   msg_info "網關: $GATEWAY"
@@ -322,14 +364,17 @@ function main() {
     msg_info "跳過固定IP配置"
   fi
   
-  # 詢問是否禁用 IPv6
+  # 詢問是否禁用 IPv6 (只有在沒有配置固定IP時才詢問)
   echo -e "\n${YW}${BOLD}3. 禁用 IPv6${CL}"
-  read -p "是否要禁用 IPv6? (y/N): " DISABLE_IPV6
-  
-  if [[ "$DISABLE_IPV6" =~ ^[Yy]$ ]]; then
-    disable_ipv6
+  if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
+    msg_info "IPv6 已在配置固定IP時處理"
   else
-    msg_info "跳過 IPv6 禁用"
+    read -p "是否要禁用 IPv6? (y/N): " DISABLE_IPV6_SEPARATE
+    if [[ "$DISABLE_IPV6_SEPARATE" =~ ^[Yy]$ ]]; then
+      disable_ipv6
+    else
+      msg_info "跳過 IPv6 禁用"
+    fi
   fi
   
   # 詢問是否優化大文件處理

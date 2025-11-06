@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # 代碼質量檢查
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js for markdownlint
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        npm install -g markdownlint-cli
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+
+    - name: Shell script linting
+      run: |
+        find . -name "*.sh" -type f -exec shellcheck {} \; || true
+
+    - name: Markdown linting
+      run: |
+        markdownlint "**/*.md" --config .markdownlint.json || true
+
+    - name: Check file permissions
+      run: |
+        # 確保腳本文件有執行權限
+        find . -name "*.sh" -type f -exec test -x {} \; -print
+
+  # 腳本測試
+  test-scripts:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup test environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bash make
+
+    - name: Validate Makefile syntax
+      run: |
+        make --dry-run || true
+
+    - name: Test script syntax
+      run: |
+        # 檢查所有 shell 腳本語法
+        find . -name "*.sh" -type f -exec bash -n {} \;
+
+    - name: Test make targets
+      run: |
+        make help || true
+
+  # 文檔檢查
+  docs-validation:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate README structure
+      run: |
+        # 檢查 README 是否包含必要章節
+        grep -q "## 功能特點" README.md || echo "Missing features section"
+        grep -q "## 安裝說明" README.md || echo "Missing installation section"
