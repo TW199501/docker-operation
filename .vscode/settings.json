@@ -72,6 +72,10 @@
     "Dockerfile*": "dockerfile"
   },
 
+  // 文件配置 (防止BOM和换行符问题)
+  "files.eol": "\n",
+  "files.autoGuessEncoding": true,
+
   // YAML 配置
   "yaml.schemas": {
     "https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json": [
