@@ -1,76 +1,84 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "調試測試腳本 (所有測試)",
-            "type": "bashdb",
-            "request": "launch",
-            "program": "${workspaceFolder}/tests/run_all_tests.sh",
-            "args": ["all"],
-            "cwd": "${workspaceFolder}",
-            "terminalKind": "integrated",
-            "showDebugOutput": true,
-            "trace": "verbose"
-        },
-        {
-            "name": "調試測試腳本 (單元測試)",
-            "type": "bashdb",
-            "request": "launch",
-            "program": "${workspaceFolder}/tests/run_all_tests.sh",
-            "args": ["unit"],
-            "cwd": "${workspaceFolder}",
-            "terminalKind": "integrated"
-        },
-        {
-            "name": "調試測試腳本 (集成測試)",
-            "type": "bashdb",
-            "request": "launch",
-            "program": "${workspaceFolder}/tests/run_all_tests.sh",
-            "args": ["integration"],
-            "cwd": "${workspaceFolder}",
-            "terminalKind": "integrated"
-        },
-        {
-            "name": "調試單個 Shell 腳本",
-            "type": "bashdb",
-            "request": "launch",
-            "program": "${file}",
-            "cwd": "${workspaceFolder}",
-            "terminalKind": "integrated",
-            "args": [],
-            "env": {}
-        },
-        {
-            "name": "調試 debian13-tool.sh",
-            "type": "bashdb",
-            "request": "launch",
-            "program": "${workspaceFolder}/proxmox9.0/debian13-tool.sh",
-            "cwd": "${workspaceFolder}",
-            "terminalKind": "integrated",
-            "args": [],
-            "env": {
-                "PATH": "${env:PATH}"
-            }
-        },
-        {
-            "name": "調試 docker-vm.sh",
-            "type": "bashdb",
-            "request": "launch",
-            "program": "${workspaceFolder}/docker-vm.sh",
-            "cwd": "${workspaceFolder}",
-            "terminalKind": "integrated",
-            "args": [],
-            "env": {
-                "PATH": "${env:PATH}"
-            }
-        },
-        {
-            "name": "PowerShell 終端 (測試環境)",
-            "type": "PowerShell",
-            "request": "launch",
-            "script": "cd ${workspaceFolder}; Write-Host '測試環境已就緒' -ForegroundColor Green",
-            "cwd": "${workspaceFolder}",
-            "name": "PowerShell Test Environment"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bashdb",
+      "request": "launch",
+      "name": "Bash-Debug (select script from list of sh files)",
+      "cwd": "${workspaceFolder}",
+      "program": "${command:SelectScriptName}",
+      "args": []
+    },
+    {
+      "name": "調試測試腳本 (所有測試)",
+      "type": "bashdb",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/run_all_tests.sh",
+      "args": ["all"],
+      "cwd": "${workspaceFolder}",
+      "terminalKind": "integrated",
+      "showDebugOutput": true,
+      "trace": "verbose"
+    },
+    {
+      "name": "調試測試腳本 (單元測試)",
+      "type": "bashdb",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/run_all_tests.sh",
+      "args": ["unit"],
+      "cwd": "${workspaceFolder}",
+      "terminalKind": "integrated"
+    },
+    {
+      "name": "調試測試腳本 (集成測試)",
+      "type": "bashdb",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/run_all_tests.sh",
+      "args": ["integration"],
+      "cwd": "${workspaceFolder}",
+      "terminalKind": "integrated"
+    },
+    {
+      "name": "調試單個 Shell 腳本",
+      "type": "bashdb",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "terminalKind": "integrated",
+      "args": [],
+      "env": {}
+    },
+    {
+      "name": "調試 debian13-tool.sh",
+      "type": "bashdb",
+      "request": "launch",
+      "program": "${workspaceFolder}/proxmox9.0/debian13-tool.sh",
+      "cwd": "${workspaceFolder}",
+      "terminalKind": "integrated",
+      "args": [],
+      "env": {
+        "PATH": "${env:PATH}"
+      }
+    },
+    {
+      "name": "調試 docker-vm.sh",
+      "type": "bashdb",
+      "request": "launch",
+      "program": "${workspaceFolder}/docker-vm.sh",
+      "cwd": "${workspaceFolder}",
+      "terminalKind": "integrated",
+      "args": [],
+      "env": {
+        "PATH": "${env:PATH}"
+      }
+    },
+    {
+      "name": "PowerShell 終端 (測試環境)",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "cd ${workspaceFolder}; Write-Host '測試環境已就緒' -ForegroundColor Green",
+      "cwd": "${workspaceFolder}",
+      "name": "PowerShell Test Environment"
+    }
+  ]
 }
