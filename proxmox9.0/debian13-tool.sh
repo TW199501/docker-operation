@@ -348,7 +348,24 @@ EOF
         /etc/init.d/networking restart
         msg_ok "✓ networking 服務重啟成功"
       else
-        msg_info "請手動重啟系統或執行: ip addr flush dev $INTERFACE && systemctl restart systemd-networkd"
+        msg_warning "⚠️ 無法重啟網路服務，嘗試手動應用配置..."
+
+        # 手動應用 IP 配置
+        msg_info "正在手動應用 IP 配置..."
+
+        # 清除現有 IP
+        ip addr flush dev "$INTERFACE"
+
+        # 添加新 IP
+        ip addr add "$STATIC_IP/24" dev "$INTERFACE"
+
+        # 添加網關
+        ip route add default via "$GATEWAY" dev "$INTERFACE"
+
+        # 添加 DNS
+        echo "nameserver $DNS" > /etc/resolv.conf
+
+        msg_ok "✓ 手動 IP 配置應用完成"
       fi
       ;;
   esac
