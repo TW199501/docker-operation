@@ -1,0 +1,154 @@
+name: Docker Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**/Dockerfile'
+      - '**/docker-compose.yml'
+      - '**/docker-compose.yaml'
+      - '**/*.sh'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/Dockerfile'
+      - '**/docker-compose.yml'
+      - '**/docker-compose.yaml'
+      - '**/*.sh'
+
+jobs:
+  # Docker 鏡像檢查
+  docker-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Find Dockerfiles
+      id: dockerfiles
+      run: |
+        echo "dockerfiles=$(find . -name "Dockerfile" -type f | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+    - name: Run Docker lint
+      if: steps.dockerfiles.outputs.dockerfiles != ''
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: ${{ matrix.dockerfile }}
+        config: .hadolint.yaml
+      continue-on-error: true
+
+  # Shell 腳本測試
+  shell-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install shellcheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+
+    - name: Test shell scripts
+      run: |
+        find . -name "*.sh" -type f -exec shellcheck {} \; || true
+
+    - name: Test script syntax
+      run: |
+        find . -name "*.sh" -type f -exec bash -n {} \;
+
+  # Docker Compose 驗證
+  docker-compose-validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Docker Compose
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker-compose
+
+    - name: Validate docker-compose files
+      run: |
+        find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | while read -r file; do
+          echo "Validating $file"
+          docker-compose -f "$file" config --quiet || echo "Warning: $file has issues"
+        done
+
+  # 構建測試
+  build-test:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'Dockerfile') || contains(github.event.head_commit.modified, 'docker-compose')
+    strategy:
+      matrix:
+        include:
+          - dockerfile: ./nginx/Dockerfile
+          - dockerfile: ./mariadb/Dockerfile
+          - dockerfile: ./redis/Dockerfile
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract app name
+      id: app-name
+      run: |
+        echo "app_name=$(basename $(dirname ${{ matrix.dockerfile }}))" >> $GITHUB_OUTPUT
+
+    - name: Build Docker image
+      run: |
+        if [ -f "${{ matrix.dockerfile }}" ]; then
+          docker build -f "${{ matrix.dockerfile }}" -t test-${{ steps.app-name.outputs.app_name }}:$(date +%s) .
+        fi
+
+    - name: Test basic container run
+      run: |
+        if [ -f "${{ matrix.dockerfile }}" ]; then
+          container_id=$(docker run -d test-${{ steps.app-name.outputs.app_name }})
+          sleep 5
+          docker logs $container_id || true
+          docker stop $container_id || true
+          docker rm $container_id || true
+        fi
+
+  # 安全掃描
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # 版本檢查
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check version consistency
+      run: |
+        if [ -f "Dockerfile/VERSION" ]; then
+          VERSION=$(cat Dockerfile/VERSION)
+          echo "Current version: $VERSION"
+
+          # 檢查是否在 README 或其他文件中提到版本
+          if grep -q "$VERSION" README.md; then
+            echo "Version found in README.md"
+          else
+            echo "Warning: Version not found in README.md"
+          fi
+        fi

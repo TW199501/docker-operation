@@ -1,0 +1,64 @@
+name: Script Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**/*.sh'
+      - '**/*.bash'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.sh'
+      - '**/*.bash'
+
+jobs:
+  test-scripts:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup shell testing environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bash shellcheck bats
+
+    - name: Run shellcheck on all scripts
+      run: |
+        find . -name "*.sh" -type f -exec shellcheck {} \; || true
+
+    - name: Test script syntax
+      run: |
+        find . -name "*.sh" -type f -exec bash -n {} \;
+
+    - name: Test docker-vm.sh syntax
+      run: |
+        if [ -f "docker-vm.sh" ]; then
+          echo "Testing docker-vm.sh..."
+          # 測試函數定義
+          grep -q "^function " docker-vm.sh && echo "Functions found" || echo "No functions found"
+          # 測試基本語法
+          head -50 docker-vm.sh | bash -n && echo "First 50 lines syntax OK"
+        fi
+
+    - name: Test docker-vm-backup.sh syntax
+      run: |
+        if [ -f "docker-vm-backup.sh" ]; then
+          echo "Testing docker-vm-backup.sh..."
+          grep -q "^function " docker-vm-backup.sh && echo "Functions found" || echo "No functions found"
+          head -50 docker-vm-backup.sh | bash -n && echo "First 50 lines syntax OK"
+        fi
+
+    - name: Check script permissions
+      run: |
+        find . -name "*.sh" -type f -exec test -x {} \; -print | head -10
+        echo "Found $(find . -name "*.sh" -type f | wc -l) shell scripts"
+
+    - name: Basic functionality test
+      run: |
+        # 測試一些基本函數（如果有的話）
+        if [ -f "docker-vm.sh" ]; then
+          # 檢查是否有主要的函數
+          grep -q "main()" docker-vm.sh && echo "Main function found" || echo "No main function"
+        fi

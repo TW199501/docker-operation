@@ -1,0 +1,17 @@
+# Docker 忽略文件
+.github/
+docs/
+*.md
+.gitignore
+README*
+LICENSE
+SECURITY.md
+**/test/
+**/tests/
+**/*.test.*
+**/*.spec.*
+.vscode/
+.idea/
+*.log
+.env*
+docker-compose.override.yml
