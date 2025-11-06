@@ -10,18 +10,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - app: nginx
-            dockerfile: ./nginx/Dockerfile
-          - app: mariadb
-            dockerfile: ./mariadb/Dockerfile
-          - app: redis
-            dockerfile: ./redis/Dockerfile
-          - app: postgres
-            dockerfile: ./POSTGRES/Dockerfile
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -42,18 +30,18 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ github.repository_owner }}/${{ matrix.app }}
+        images: ${{ github.repository_owner }}/docker-operation
         tags: |
           type=ref,event=tag
           type=ref,event=branch
           type=raw,value=latest,enable={{is_default_branch}}
           type=sha,prefix={{branch}}-
 
-    - name: Build and push
+    - name: Build and push base image
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ${{ matrix.dockerfile }}
+        file: ./Dockerfile  # 如果根目錄有 Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.meta.outputs.tags }}
@@ -64,6 +52,6 @@ jobs:
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
       with:
-        subject-name: ${{ github.repository_owner }}/${{ matrix.app}}
+        subject-name: ${{ github.repository_owner }}/docker-operation
         subject-digest: ${{ steps.push.outputs.digest }}
         push-to-registry: true

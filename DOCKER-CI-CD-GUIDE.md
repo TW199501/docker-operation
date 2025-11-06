@@ -25,26 +25,25 @@
 ### 1. **Docker CI 流程** (`docker-ci.yml`)
 - ✅ **Dockerfile 檢查** - 使用 Hadolint 檢查語法
 - ✅ **Shell 腳本測試** - 使用 ShellCheck 檢查腳本
-- ✅ **Docker Compose 驗證** - 檢查 compose 文件語法
-- ✅ **鏡像構建測試** - 測試主要應用的鏡像構建
-- ✅ **安全掃描** - 使用 Trivy 掃描漏洞
-- ✅ **版本一致性檢查** - 確保版本標籤正確
 
-### 2. **腳本測試流程** (`script-test.yml`)
-- ✅ **語法檢查** - 所有 `.sh` 文件的語法驗證
-- ✅ **ShellCheck 檢查** - 腳本質量檢查
-- ✅ **權限檢查** - 確保腳本有執行權限
+### 2. **鏡像發佈流程** (`docker-publish.yml`)
+- ✅ **多平台構建** - amd64 + arm64 (如果有 Dockerfile)
+- ✅ **Docker Hub 發佈** - 發佈根目錄的 Dockerfile (如果存在)
+- ✅ **版本標籤** - 基於 Git 標籤自動標籤
+- ✅ **安全證明** - 構建證明生成
+
+### 3. **腳本測試流程** (`script-test.yml`)
+- ✅ **語法檢查** - 所有 `.sh` 文件
+- ✅ **ShellCheck 掃描** - 腳本質量保證
+- ✅ **權限驗證** - 確保腳本可執行
 - ✅ **功能測試** - 基本功能驗證
 
-### 3. **鏡像發佈流程** (`docker-publish.yml`)
-- ✅ **多平台構建** - amd64 和 arm64
-- ✅ **自動標籤** - 基於 Git 標籤和分支
+### 4. **依賴管理** (`dependabot.yml`)
+- ✅ **GitHub Actions 更新** - 工作流程 Actions 自動更新
+- ✅ **Docker 依賴更新** - 根目錄 Dockerfile 依賴更新基於 Git 標籤和分支
 - ✅ **安全證明** - 生成構建證明
 - ✅ **Docker Hub 發佈** - 自動推送到 Docker Hub
 
-### 4. **依賴管理** (`dependabot.yml`)
-- ✅ **GitHub Actions 更新**
-- ✅ **Docker 基礎鏡像更新**
 - ✅ **自動化 PR 生成**
 
 ## 📋 工作流程觸發條件
