@@ -1,11 +1,11 @@
-# 存檔並執行
+#!/bin/bash
+
 # ================================================
 # 編譯 00-preflight-nginx.sh 基線
 # 版本：v1.5（整合 UFW 基線；update 腳本可選同步 UFW）
 # 說明：安裝前的準備工作
 # 日期：2025-10-03
 # ===============================================
-sudo tee /root/nginx-preflight.sh >/dev/null <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -62,7 +62,5 @@ echo "==> 完成。摘要："
 getent passwd www-data || true
 getent passwd nginx || true
 ls -ld /var/cache/nginx /var/cache/nginx/* || true
-BASH
 
-sudo chmod +x /root/nginx-preflight.sh
-sudo /root/nginx-preflight.sh
+

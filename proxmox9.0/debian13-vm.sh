@@ -580,7 +580,7 @@ qm set $VMID --ide2 $STORAGE:cloudinit
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
-  
+
 </div>
 EOF
 )
@@ -593,4 +593,4 @@ if [ "$START_VM" == "yes" ]; then
   msg_ok "Started Debian 13 VM"
 fi
 post_update_to_api "done" "none"
-msg_ok "Completed Successfully!\n"
+msg_ok "Completed Successfully!"

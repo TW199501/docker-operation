@@ -23,12 +23,12 @@ export LANG=C
 function header_info {
   clear
   cat <<"EOF"
-    ____       __    _               ________  __  _______  
-   / __ \___  / /_  (_)___ _____    /_  __/ / / / /_  __/  
-  / / / / _ \/ __ \/ / __ `/ __ \    / / / / / /   / /     
- / /_/ /  __/ /_/ / / /_/ / / / /   / / / /_/ /   / /      
-/_____/\___/_.___/_/\__,_/_/ /_/   /_/  \____/   /_/       
-                                                         
+    ____       __    _               ________  __  _______
+   / __ \___  / /_  (_)___ _____    /_  __/ / / / /_  __/
+  / / / / _ \/ __ \/ / __ `/ __ \    / / / / / /   / /
+ / /_/ /  __/ /_/ / / /_/ / / / /   / / / /_/ /   / /
+/_____/\___/_.___/_/\__,_/_/ /_/   /_/  \____/   /_/
+
     ______            __  _
    /_  __/___  ____  / /_(_)___  ____
     / / / __ \/ __ \/ __/ / __ \/ __ \
@@ -87,16 +87,16 @@ function msg_error() {
 # 設置 root 密碼
 function set_root_password() {
   msg_info "正在設置 root 用戶密碼..."
-  
+
   while true; do
     # 輸入密碼
     read -s -p "請輸入 root 用戶的新密碼: " ROOT_PASSWORD
     echo
-    
+
     # 確認密碼
     read -s -p "請再次輸入密碼以確認: " ROOT_PASSWORD_CONFIRM
     echo
-    
+
     # 檢查密碼是否匹配
     if [ "$ROOT_PASSWORD" = "$ROOT_PASSWORD_CONFIRM" ]; then
       if [ -n "$ROOT_PASSWORD" ]; then
@@ -120,19 +120,19 @@ function set_root_password() {
 # 配置 SSH
 function configure_ssh() {
   msg_info "正在配置 SSH..."
-  
+
   # 安裝 SSH 服務
   apt update && apt install -y openssh-client openssh-server
-  
+
   # 配置 SSH 允許密碼登錄
   sed -i -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' -e 's/^PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-  
+
   # 生成 SSH 密鑰
   ssh-keygen -A
-  
+
   # 重啟 SSH 服務
   systemctl restart sshd
-  
+
   msg_ok "✓ SSH 配置完成"
 }
 
@@ -413,21 +413,21 @@ EOF
 # 優化系統性能以處理大文件
 function optimize_for_large_files() {
   msg_info "正在優化系統以處理大文件..."
-  
+
   # 創建專用的 sysctl 配置文件
   local f=/etc/sysctl.d/99-io-tuning.conf
   mkdir -p /etc/sysctl.d
-  
+
   # 寫入優化參數
   cat >"$f" <<'EOF'
 vm.dirty_ratio = 5
 vm.dirty_background_ratio = 2
 vm.swappiness = 10
 EOF
-  
+
   # 應用內核參數
   sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
-  
+
   msg_ok "✓ 系統大文件處理優化完成"
   msg_info "配置文件: $f"
 }
@@ -603,20 +603,20 @@ function expand_disk() {
 # 優化網路傳輸
 function optimize_network_stack() {
   msg_info "正在優化網路傳輸參數..."
-  
+
   # 創建網路優化配置文件
   local f=/etc/sysctl.d/99-net-opt.conf
   mkdir -p /etc/sysctl.d
-  
+
   # 檢測是否支援 BBR
   local cc="cubic"
-  if sysctl net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -qw bbr; then 
+  if sysctl net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -qw bbr; then
     cc="bbr"
     msg_info "檢測到 BBR 支援，將使用 BBR 擁塞控制"
   else
     msg_info "使用默認擁塞控制: cubic"
   fi
-  
+
   # 寫入網路優化參數
   cat >"$f" <<EOF
 # 網路優化參數
@@ -636,60 +636,60 @@ net.ipv4.tcp_rmem = 4096 1048576 67108864
 net.ipv4.tcp_wmem = 4096 1048576 67108864
 net.ipv4.ip_forward = 1
 EOF
-  
+
   # 應用網路參數
   sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
-  
+
   msg_ok "✓ 網路參數優化完成"
-  
+
   # 網路介面層優化
   local iface
   iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
-  
+
   if [ -n "${iface:-}" ]; then
     msg_info "正在優化網路介面: $iface"
-    
+
     # 安裝 ethtool（如果可用）
     apt install -y ethtool >/dev/null 2>&1 || true
-    
+
     # 調整介面參數
     ip link set dev "$iface" txqueuelen 10000 2>/dev/null || true
     ethtool -K "$iface" gro on gso on tso on >/dev/null 2>&1 || true
     ethtool -G "$iface" rx 4096 tx 4096 >/dev/null 2>&1 || true
-    
+
     msg_ok "✓ 網路介面優化完成"
   else
     msg_info "找不到預設路由介面，跳過介面層調整"
   fi
-  
+
   msg_info "網路優化配置文件: $f"
 }
 
 # 主程序
 function main() {
   msg_info "=== Debian 13 VM 工具 ==="
-  
+
   # 詢問是否設置密碼
   echo -e "\n${YW}${BOLD}1. 設置 root 密碼${CL}"
   read -p "是否要設置 root 密碼? (y/N): " SET_PASSWORD
-  
+
   if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
     set_root_password
     configure_ssh
   else
     msg_info "跳過密碼設置"
   fi
-  
+
   # 詢問是否配置固定IP
   echo -e "\n${YW}${BOLD}2. 配置固定IP地址${CL}"
   read -p "是否要配置固定IP地址? (y/N): " CONFIG_STATIC_IP
-  
+
   if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
     configure_static_ip
   else
     msg_info "跳過固定IP配置"
   fi
-  
+
   # 詢問是否禁用 IPv6 (只有在沒有配置固定IP時才詢問)
   echo -e "\n${YW}${BOLD}3. 禁用 IPv6${CL}"
   if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
@@ -702,37 +702,37 @@ function main() {
       msg_info "跳過 IPv6 禁用"
     fi
   fi
-  
+
   # 詢問是否優化大文件處理
   echo -e "\n${YW}${BOLD}4. 優化大文件處理${CL}"
   read -p "是否要優化系統以更好地處理大文件? (y/N): " OPTIMIZE_LARGE_FILES
-  
+
   if [[ "$OPTIMIZE_LARGE_FILES" =~ ^[Yy]$ ]]; then
     optimize_for_large_files
   else
     msg_info "跳過大文件處理優化"
   fi
-  
+
   # 詢問是否擴展硬碟
   echo -e "\n${YW}${BOLD}5. 擴展硬碟空間${CL}"
   read -p "是否要擴展硬碟空間? (y/N): " EXPAND_DISK
-  
+
   if [[ "$EXPAND_DISK" =~ ^[Yy]$ ]]; then
     expand_disk
   else
     msg_info "跳過硬碟擴展"
   fi
-  
+
   # 詢問是否優化網路傳輸
   echo -e "\n${YW}${BOLD}6. 優化網路傳輸${CL}"
   read -p "是否要優化網路傳輸參數 (BBR, socket buffer 等)? (y/N): " OPTIMIZE_NETWORK
-  
+
   if [[ "$OPTIMIZE_NETWORK" =~ ^[Yy]$ ]]; then
     optimize_network_stack
   else
     msg_info "跳過網路傳輸優化"
   fi
-  
+
   msg_ok "\n=== 所有操作完成 ==="
   msg_info "您可以使用 SSH 連接到此虛擬機"
 }
