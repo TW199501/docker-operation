@@ -586,16 +586,7 @@ DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
   
-    <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
-  
-  <h2 style='font-size: 24px; margin: 20px 0;'>Debian 13 VM</h2>
-  <p style='margin: 16px 0;'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />    
-  </p>
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
-  </span>
+
 </div>
 EOF
 )

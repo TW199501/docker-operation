@@ -258,8 +258,74 @@ function configure_static_ip() {
     cp /etc/network/interfaces /etc/network/interfaces.backup
   fi
 
-  # 配置網絡接口
-  cat > /etc/network/interfaces <<EOF
+  # 檢查系統使用的網路管理器
+  local network_manager=""
+
+  if systemctl is-active --quiet systemd-networkd 2>/dev/null; then
+    network_manager="systemd-networkd"
+    msg_info "檢測到使用 systemd-networkd"
+  elif systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    network_manager="NetworkManager"
+    msg_info "檢測到使用 NetworkManager"
+  else
+    network_manager="interfaces"
+    msg_info "使用傳統 interfaces 文件"
+  fi
+
+  case "$network_manager" in
+    "systemd-networkd")
+      # 配置 systemd-networkd
+      msg_info "配置 systemd-networkd..."
+
+      cat > "/etc/systemd/network/10-$INTERFACE.network" <<EOF
+[Match]
+Name=$INTERFACE
+
+[Network]
+Address=$STATIC_IP/24
+Gateway=$GATEWAY
+DNS=$DNS
+EOF
+
+      # 重新載入並重啟網路服務
+      systemctl daemon-reload
+      systemctl restart systemd-networkd
+
+      msg_ok "✓ systemd-networkd 配置完成"
+      ;;
+
+    "NetworkManager")
+      # 配置 NetworkManager
+      msg_info "配置 NetworkManager..."
+
+      # 創建 NetworkManager 連接文件
+      cat > "/etc/NetworkManager/system-connections/$INTERFACE.nmconnection" <<EOF
+[connection]
+id=$INTERFACE
+type=ethernet
+interface-name=$INTERFACE
+
+[ipv4]
+method=manual
+address1=$STATIC_IP/24,$GATEWAY
+dns=$DNS;
+
+[ipv6]
+method=ignore
+EOF
+
+      chmod 600 "/etc/NetworkManager/system-connections/$INTERFACE.nmconnection"
+      nmcli connection reload
+      nmcli connection up "$INTERFACE"
+
+      msg_ok "✓ NetworkManager 配置完成"
+      ;;
+
+    "interfaces"|*)
+      # 配置傳統 interfaces 文件
+      msg_info "配置傳統網路接口..."
+
+      cat > /etc/network/interfaces <<EOF
 # Loopback network interface
 auto lo
 iface lo inet loopback
@@ -273,27 +339,58 @@ iface $INTERFACE inet static
     dns-nameservers $DNS
 EOF
 
-  # 重啟網絡服務
-  msg_info "正在重啟網絡服務..."
-  if systemctl restart networking 2>/dev/null; then
-    msg_ok "✓ 網絡服務重啟成功"
+      # 嘗試重啟網路服務
+      msg_info "正在重啟網路服務..."
+      if systemctl is-active --quiet networking 2>/dev/null; then
+        systemctl restart networking
+        msg_ok "✓ networking 服務重啟成功"
+      elif [ -f /etc/init.d/networking ]; then
+        /etc/init.d/networking restart
+        msg_ok "✓ networking 服務重啟成功"
+      else
+        msg_info "請手動重啟系統或執行: ip addr flush dev $INTERFACE && systemctl restart systemd-networkd"
+      fi
+      ;;
+  esac
+
+  # 等待網路配置生效
+  sleep 3
+
+  # 驗證配置
+  msg_info "驗證網路配置..."
+  local new_ip=$(ip addr show $INTERFACE | grep -oP 'inet \K[\d.]+' | head -1)
+
+  if [ "$new_ip" = "$STATIC_IP" ]; then
+    msg_ok "✓ IP地址配置成功: $STATIC_IP"
   else
-    msg_info "正在嘗試其他網絡服務重啟方法..."
-    if /etc/init.d/networking restart 2>/dev/null; then
-      msg_ok "✓ 網絡服務重啟成功"
-    else
-      msg_info "請手動重啟系統以應用網絡配置"
-    fi
+    msg_warning "⚠️ IP地址可能需要重啟系統才能生效"
+    msg_info "當前IP: $new_ip, 配置的IP: $STATIC_IP"
   fi
 
-  # 顯示新配置
-  msg_info "新的網絡配置:"
+  # 測試網路連通性
+  msg_info "測試網路連通性..."
+  if ping -c 3 -W 5 "$GATEWAY" >/dev/null 2>&1; then
+    msg_ok "✓ 網關可達"
+  else
+    msg_warning "⚠️ 無法連接到網關，請檢查網路配置"
+  fi
+
+  if ping -c 3 -W 5 8.8.8.8 >/dev/null 2>&1; then
+    msg_ok "✓ 外部網路可達"
+  else
+    msg_warning "⚠️ 無法連接到外部網路"
+  fi
+
+  # 顯示最終配置
+  msg_info "最終網路配置:"
   ip addr show $INTERFACE
+  ip route show
 
   msg_ok "✓ 固定IP地址配置完成"
   msg_info "IP地址: $STATIC_IP"
   msg_info "網關: $GATEWAY"
   msg_info "DNS: $DNS"
+  msg_info "網路管理器: $network_manager"
 }
 
 # 優化系統性能以處理大文件
@@ -320,52 +417,106 @@ EOF
 
 # 擴展硬碟空間
 function expand_disk() {
-  msg_info "正在擴展硬碟空間..."
-  
+  msg_info "正在檢查硬碟空間..."
+
   # 安裝必要的工具
   apt update && apt install -y cloud-guest-utils lvm2 xfsprogs btrfs-progs
-  
+
   # 獲取根設備和文件系統類型
   local rootdev fstype
   rootdev=$(findmnt -no SOURCE /)
   fstype=$(findmnt -no FSTYPE /)
-  
+
   msg_info "根設備: $rootdev"
   msg_info "文件系統: $fstype"
-  
+
+  # 檢查可用空間
+  local disk_info=$(df -BG / | tail -1)
+  local total_space=$(echo "$disk_info" | awk '{print $2}' | sed 's/G//')
+  local used_space=$(echo "$disk_info" | awk '{print $3}' | sed 's/G//')
+  local avail_space=$(echo "$disk_info" | awk '{print $4}' | sed 's/G//')
+
+  msg_info "總空間: ${total_space}GB, 已用: ${used_space}GB, 可用: ${avail_space}GB"
+
+  # 檢查磁碟是否有未分配空間
+  local has_free_space=false
+
+  if [[ "$rootdev" =~ ^/dev/mapper/.+ ]]; then
+    # LVM 檢查
+    local vg_free=$(vgs --noheadings -o vg_free --units G 2>/dev/null | awk '{print $1}' | sed 's/G//' | head -1)
+    if [ -n "$vg_free" ] && [ "$(echo "$vg_free > 0" | bc 2>/dev/null)" = "1" ]; then
+      has_free_space=true
+      msg_info "LVM VG 可用空間: ${vg_free}GB"
+    fi
+  else
+    # 傳統分區檢查 - 檢查磁碟是否有未分配空間
+    local disk part
+    if [[ "$rootdev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
+      disk="${BASH_REMATCH[1]}"
+      part="${BASH_REMATCH[2]}"
+    elif [[ "$rootdev" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then
+      disk="${BASH_REMATCH[1]}"
+      part="${BASH_REMATCH[2]}"
+    fi
+
+    if [ -n "${disk:-}" ]; then
+      # 檢查磁碟總大小和分區大小
+      local disk_size=$(lsblk -b -n -o SIZE "$disk" 2>/dev/null | head -1)
+      local part_size=$(lsblk -b -n -o SIZE "$rootdev" 2>/dev/null)
+
+      if [ -n "$disk_size" ] && [ -n "$part_size" ] && [ "$disk_size" -gt "$part_size" ]; then
+        local unused_space=$(( (disk_size - part_size) / 1024 / 1024 / 1024 )) # GB
+        if [ "$unused_space" -gt 1 ]; then  # 如果未分配空間大於1GB
+          has_free_space=true
+          msg_info "磁碟有未分配空間: ${unused_space}GB"
+        fi
+      fi
+    fi
+  fi
+
+  # 如果沒有可用空間，跳過擴充
+  if [ "$has_free_space" = false ]; then
+    msg_ok "✓ 硬碟已經是最大容量，無需擴充"
+    msg_info "當前硬碟使用情況:"
+    df -h /
+    return 0
+  fi
+
+  msg_info "檢測到可用空間，正在擴展硬碟空間..."
+
   # 檢查是否為 LVM
   if [[ "$rootdev" =~ ^/dev/mapper/.+ ]]; then
     # LVM 處理
     msg_info "檢測到 LVM 配置，正在處理..."
-    
+
     local lv pv disk part
     lv="$rootdev"
     pv=$(pvs --noheadings -o pv_name 2>/dev/null | awk 'NF{print $1; exit}')
-    
+
     if [ -z "${pv:-}" ]; then
       msg_error "✗ 找不到 PV，可能非 LVM 或需手動處理"
       return 1
     fi
-    
+
     # 解析磁碟和分區
-    if [[ "$pv" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then 
+    if [[ "$pv" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
-    elif [[ "$pv" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then 
+    elif [[ "$pv" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
-    else 
+    else
       msg_error "✗ 無法解析 PV: $pv"
       return 1
     fi
-    
+
     msg_info "正在擴展分區: $disk 第 $part 分區"
-    
+
     # 執行 LVM 擴展
     if growpart "$disk" "$part"; then
       msg_ok "✓ 分區擴展成功"
-      
+
       if pvresize "$pv"; then
         msg_ok "✓ PV 重新調整大小成功"
-        
+
         if lvextend -r -l +100%FREE "$lv"; then
           msg_ok "✓ LV 擴展成功"
           df -h /
@@ -386,42 +537,42 @@ function expand_disk() {
   else
     # 非 LVM 處理
     msg_info "檢測到傳統分區，正在處理..."
-    
+
     local disk part
-    if [[ "$rootdev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then 
+    if [[ "$rootdev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
-    elif [[ "$rootdev" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then 
+    elif [[ "$rootdev" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
-    else 
+    else
       msg_error "✗ 不支援的根設備: $rootdev"
       return 1
     fi
-    
+
     msg_info "正在擴展分區: $disk 第 $part 分區"
-    
+
     if growpart "$disk" "$part"; then
       msg_ok "✓ 分區擴展成功"
-      
+
       # 根據文件系統類型調整大小
       case "$fstype" in
-        ext2|ext3|ext4) 
+        ext2|ext3|ext4)
           msg_info "正在調整 ext 文件系統..."
           resize2fs "$rootdev"
           ;;
-        xfs) 
+        xfs)
           msg_info "正在調整 XFS 文件系統..."
           xfs_growfs -d /
           ;;
-        btrfs) 
+        btrfs)
           msg_info "正在調整 Btrfs 文件系統..."
           btrfs filesystem resize max /
           ;;
-        *) 
+        *)
           msg_error "✗ 不支援的文件系統: $fstype"
           return 1
           ;;
       esac
-      
+
       msg_ok "✓ 文件系統調整完成"
       df -h /
       msg_ok "✓ 硬碟擴展完成"
