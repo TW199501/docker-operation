@@ -38,7 +38,7 @@ cd "$BUILD_DIR"
 
 # ===== 抓 Nginx 原始碼 =====
 echo ">> 下載 Nginx ${NGINX_VERSION}"
-wget -q "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
+wget -q "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
 tar -xzf "nginx-${NGINX_VERSION}.tar.gz"
 
 # ===== 模組原始碼 =====
