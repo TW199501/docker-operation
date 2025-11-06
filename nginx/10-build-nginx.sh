@@ -9,7 +9,7 @@ set -euo pipefail
 
 # ===== 可調參數（可用環境變數覆寫） =====
 BUILD_DIR="${BUILD_DIR:-/home/nginx_build_geoip2}"
-NGINX_VERSION="${NGINX_VERSION:-1.29.1}" # Nginx 版本
+NGINX_VERSION="${NGINX_VERSION:-1.29.3}" # Nginx 版本
 LAN_CIDR="${LAN_CIDR:-192.168.25.0/24}"  # 本機介面 IPv4
 
 UFW_BASELINE="${UFW_BASELINE:-yes}"   # yes: 套用基礎 UFW（80/443 對外、22/8080 僅內網）
@@ -169,7 +169,7 @@ make clean || true
   --add-dynamic-module="$BUILD_DIR/ngx_brotli" \
   --add-dynamic-module="$BUILD_DIR/headers-more-nginx-module" \
   --add-dynamic-module="$BUILD_DIR/ngx_cache_purge" \
-  --add-dynamic-module="$BUILD_DIR/njs/nginx" 
+  --add-dynamic-module="$BUILD_DIR/njs/nginx"
 
 echo ">> make / make install"
 make -j2
