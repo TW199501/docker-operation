@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2025 community-scripts ORG
-# Author: thost96 (thost96) | Co-Author: michelroegl-brunner
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-
-source /dev/stdin <<<$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
 
 function header_info() {
   clear
@@ -586,7 +581,6 @@ DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
   
-
 </div>
 EOF
 )

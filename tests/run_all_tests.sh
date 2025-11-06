@@ -233,6 +233,26 @@ run_security_tests() {
     return 0
 }
 
+# 檢查是否在 WSL 環境中
+is_wsl() {
+    [ -n "$WSL_DISTRO_NAME" ] || [ -n "$WSLENV" ] || grep -q "microsoft" /proc/version 2>/dev/null
+}
+
+# 檢查 Docker 是否可用
+is_docker_available() {
+    command -v docker >/dev/null 2>&1 && command -v docker-compose >/dev/null 2>&1
+}
+
+# WSL 環境警告
+wsl_warning() {
+    if is_wsl && ! is_docker_available; then
+        log_warning "⚠️  檢測到 WSL 環境，但 Docker 不可用"
+        log_warning "💡 建議啟動 Docker Desktop 並啟用 WSL 集成"
+        log_warning "📖 參考: https://docs.docker.com/desktop/windows/wsl/"
+        echo
+    fi
+}
+
 # 主函數
 main() {
     log_info "Docker 操作專案測試套件 / Docker Operations Project Test Suite"
@@ -242,6 +262,9 @@ main() {
     if ! check_dependencies; then
         exit 1
     fi
+
+    # WSL 環境檢查和警告
+    wsl_warning
 
     local overall_result=0
 
