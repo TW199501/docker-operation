@@ -574,8 +574,13 @@ qm set $VMID \
   -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
-qm resize $VMID scsi0 8G >/dev/null
+# qm resize $VMID scsi0 8G >/dev/null
+# 若仍想保留 resize 動作，請用你選的 DISK_SIZE（或乾脆刪掉這行）
+qm resize $VMID scsi0 "$DISK_SIZE" >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
+# qm set $VMID --agent enabled=1 >/dev/null
+# 讓 PVE 的 Cloud-Init 設定生效（之後可在 GUI 的 Cloud-Init 分頁填 user/ssh/ipconfig0）
+qm set $VMID --ide2 $STORAGE:cloudinit
 
 DESCRIPTION=$(
   cat <<EOF
