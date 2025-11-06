@@ -1,0 +1,180 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "運行所有測試",
+            "type": "shell",
+            "command": "cd",
+            "args": ["tests", "&&", "bash", "run_all_tests.sh", "all"],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false
+            },
+            "problemMatcher": {
+                "owner": "shell",
+                "source": "test",
+                "applyTo": "closedDocuments",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": [
+                    {
+                        "regexp": "^(❌|✗)\\s+(.+)$",
+                        "severity": 0,
+                        "message": 2
+                    }
+                ]
+            }
+        },
+        {
+            "label": "運行單元測試",
+            "type": "shell",
+            "command": "cd",
+            "args": ["tests", "&&", "bash", "run_all_tests.sh", "unit"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "運行集成測試",
+            "type": "shell",
+            "command": "cd",
+            "args": ["tests", "&&", "bash", "run_all_tests.sh", "integration"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "運行端到端測試",
+            "type": "shell",
+            "command": "cd",
+            "args": ["tests", "&&", "bash", "run_all_tests.sh", "e2e"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "驗證 Docker Compose 文件",
+            "type": "shell",
+            "command": "find",
+            "args": [".", "-name", "docker-compose*.yml", "-o", "-name", "docker-compose*.yaml", "|", "xargs", "-I", "{}", "docker-compose", "-f", "{}", "config", "--quiet"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": {
+                "owner": "docker-compose",
+                "source": "docker-compose",
+                "applyTo": "closedDocuments",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": [
+                    {
+                        "regexp": "^ERROR:\\s+(.+)$",
+                        "severity": 0,
+                        "message": 1
+                    }
+                ]
+            }
+        },
+        {
+            "label": "檢查 Shell 腳本語法",
+            "type": "shell",
+            "command": "find",
+            "args": [".", "-name", "*.sh", "-type", "f", "-exec", "bash", "-n", "{}", ";"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": {
+                "owner": "bash",
+                "source": "bash",
+                "applyTo": "closedDocuments",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": [
+                    {
+                        "regexp": "^([^:]+): line (\\d+): (.+)$",
+                        "file": 1,
+                        "line": 2,
+                        "severity": 0,
+                        "message": 3
+                    }
+                ]
+            }
+        },
+        {
+            "label": "運行 ShellCheck",
+            "type": "shell",
+            "command": "find",
+            "args": [".", "-name", "*.sh", "-type", "f", "-exec", "shellcheck", "{}", ";"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "清理測試環境",
+            "type": "shell",
+            "command": "cd",
+            "args": ["tests", "&&", "rm", "-rf", "test-results-*.txt", "debug.log"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "顯示測試幫助",
+            "type": "shell",
+            "command": "cd",
+            "args": ["tests", "&&", "bash", "demo.sh"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "檢查項目結構",
+            "type": "shell",
+            "command": "find",
+            "args": [".", "-name", "docker-compose*.yml", "-o", "-name", "docker-compose*.yaml", "-o", "-name", "*.sh", "|", "head", "-20"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}

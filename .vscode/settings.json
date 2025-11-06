@@ -51,5 +51,55 @@
   },
 
   // Status bar
-  "mssql.statusBar.connectionInfoMaxLength": -1
+  "mssql.statusBar.connectionInfoMaxLength": -1,
+
+  // ===== Docker 操作專案測試和開發配置 =====
+
+  // Shell 腳本配置
+  "shellcheck.enable": true,
+  "shellcheck.enableQuickFix": true,
+  "shellcheck.exclude": [
+    "SC2034", // 未使用的變數 (在測試中常見)
+    "SC2154", // 引用未賦值的變數 (在函數中常見)
+    "SC1090", // 無法跟蹤非常量來源 (source 命令)
+    "SC1091"  // 找不到包含的文件
+  ],
+
+  // 文件關聯
+  "files.associations": {
+    "*.sh": "shellscript",
+    "*.bash": "shellscript",
+    "Dockerfile*": "dockerfile"
+  },
+
+  // YAML 配置
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json": [
+      "docker-compose*.yml",
+      "docker-compose*.yaml"
+    ]
+  },
+
+  // 測試配置
+  "testExplorer.useNativeTesting": true,
+  "testExplorer.addToEditorContextMenu": true,
+
+  // 終端配置 (Windows PowerShell)
+  "terminal.integrated.shell.windows": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+  "terminal.integrated.shellArgs.windows": [
+    "-NoExit",
+    "-Command",
+    "cd '${workspaceFolder}'"
+  ],
+  "terminal.integrated.scrollback": 10000,
+
+  // Git 配置
+  "git.autofetch": true,
+  "git.confirmSync": false,
+
+  // 自定義測試命令
+  "dockerOperation.testAllCommand": "cd tests && bash run_all_tests.sh all",
+  "dockerOperation.testUnitCommand": "cd tests && bash run_all_tests.sh unit",
+  "dockerOperation.testIntegrationCommand": "cd tests && bash run_all_tests.sh integration",
+  "dockerOperation.testE2eCommand": "cd tests && bash run_all_tests.sh e2e"
 }

@@ -1,0 +1,46 @@
+{
+  "recommendations": [
+    "continue.continue",
+
+    // ===== Docker 操作專案測試和開發擴展 =====
+
+    // Shell 腳本支持
+    "timonwong.shellcheck",           // ShellCheck - Shell 腳本靜態分析
+    "rogalmic.bash-debug",            // Bash Debug - 調試 Shell 腳本
+    "mads-hartmann.bash-ide-vscode",  // Bash IDE - Shell 腳本 IDE 功能
+
+    // Docker 支持
+    "ms-azuretools.vscode-docker",    // Docker - Docker 工具和支持
+    "ms-vscode-remote.remote-containers", // Dev Containers - 容器開發
+
+    // YAML 支持
+    "redhat.vscode-yaml",             // YAML - YAML 語言支持
+
+    // 測試和調試
+    "hbenl.vscode-test-explorer",     // Test Explorer - 測試資源管理器
+    "ms-vscode.test-adapter-converter", // Test Adapter Converter
+
+    // Git 和版本控制
+    "eamodio.gitlens",                // GitLens - 增強 Git 功能
+    "ms-vscode.vscode-json",          // JSON Language Features
+
+    // 代碼質量
+    "esbenp.prettier-vscode",         // Prettier - 代碼格式化
+    "ms-vscode.vscode-typescript-next", // TypeScript Importer
+
+    // 終端和命令行
+    "ms-vscode-remote.remote-ssh",    // Remote SSH - SSH 遠程開發
+    "ms-vscode.powershell",           // PowerShell - PowerShell 支持
+
+    // 可選的擴展 (按需安裝)
+    "ms-vscode.vscode-json",          // JSON 語言支持
+    "ms-vscode.vscode-markdown",      // Markdown 支持
+    "yzhang.markdown-all-in-one"      // Markdown All in One
+  ],
+
+  "unwantedRecommendations": [
+    // 不推薦的擴展
+    "ms-vscode.vscode-typescript",    // 使用 next 版本
+    "hookyqr.beautify"                // 使用 Prettier 替代
+  ]
+}

@@ -1,0 +1,49 @@
+[
+    {
+        "key": "ctrl+shift+t",
+        "command": "workbench.action.tasks.runTask",
+        "args": "運行所有測試",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "ctrl+shift+u",
+        "command": "workbench.action.tasks.runTask",
+        "args": "運行單元測試",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "ctrl+shift+i",
+        "command": "workbench.action.tasks.runTask",
+        "args": "運行集成測試",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "ctrl+shift+e",
+        "command": "workbench.action.tasks.runTask",
+        "args": "運行端到端測試",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "ctrl+shift+y",
+        "command": "workbench.action.tasks.runTask",
+        "args": "驗證 Docker Compose 文件",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "ctrl+shift+s",
+        "command": "workbench.action.tasks.runTask",
+        "args": "檢查 Shell 腳本語法",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "ctrl+shift+h",
+        "command": "workbench.action.tasks.runTask",
+        "args": "顯示測試幫助",
+        "when": "workspaceFolder != ''"
+    },
+    {
+        "key": "f5",
+        "command": "workbench.action.debug.start",
+        "when": "resourceExtname == '.sh'"
+    }
+]
