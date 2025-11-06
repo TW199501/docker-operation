@@ -267,13 +267,20 @@ tune_docker_daemon(){
   iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
   if [ -n "${iface:-}" ]; then mtu_default=$(ip link show dev "$iface" | awk '{for(i=1;i<=NF;i++) if ($i=="mtu") {print $(i+1); exit}}'); fi
   [ -z "${mtu_default:-}" ] && mtu_default=1500
-  read -rp "Docker bridge MTU（預設 ${mtu_default}）: " mtu_input; [ -z "${mtu_input:-}" ] && mtu_input="$mtu_default"
+  read -p "Docker bridge MTU（預設 ${mtu_default}）: " mtu_input
+  [ -z "${mtu_input:-}" ] && mtu_input="$mtu_default"
   local enable_ipv6=false cidrv6_default="fd00:dead:beef::/64" cidrv6_input
-  read -rp "啟用 Docker IPv6？(y/N): " ans; [[ "$ans" =~ ^[Yy]$ ]] && enable_ipv6=true
-  if $enable_ipv6; then read -rp "fixed-cidr-v6（預設 ${cidrv6_default}）: " cidrv6_input; [ -z "${cidrv6_input:-}" ] && cidrv6_input="$cidrv6_default"; fi
+  read -p "啟用 Docker IPv6? (y/N): " ans
+  [[ "$ans" =~ ^[Yy]$ ]] && enable_ipv6=true
+  if $enable_ipv6; then
+    read -p "fixed-cidr-v6（預設 ${cidrv6_default}）: " cidrv6_input
+    [ -z "${cidrv6_input:-}" ] && cidrv6_input="$cidrv6_default"
+  fi
   local nofile_default=1048576 dnofile_default=1048576 nofile_input dnofile_input
-  read -rp "容器 default nofile（預設 ${nofile_default}）: " nofile_input; [ -z "${nofile_input:-}" ] && nofile_input=$nofile_default
-  read -rp "Docker 服務 LimitNOFILE（預設 ${dnofile_default}）: " dnofile_input; [ -z "${dnofile_input:-}" ] && dnofile_input=$dnofile_default
+  read -p "容器 default nofile（預設 ${nofile_default}）: " nofile_input
+  [ -z "${nofile_input:-}" ] && nofile_input=$nofile_default
+  read -p "Docker 服務 LimitNOFILE（預設 ${dnofile_default}）: " dnofile_input
+  [ -z "${dnofile_input:-}" ] && dnofile_input=$dnofile_default
   # 轉送
   ensure_line "net.ipv4.ip_forward = 1" /etc/sysctl.d/99-net-opt.conf
   if $enable_ipv6; then ensure_line "net.ipv6.conf.all.forwarding = 1" /etc/sysctl.d/99-net-opt.conf; fi
@@ -296,7 +303,7 @@ EOF
       --arg cidrv6 "$cidrv6_input" \
       --argjson nf "$nofile_input" \
       '.mtu=$mtu | .ipv6=true | .ip6tables=true | .["fixed-cidr-v6"]=$cidrv6 |
-       .["default-ulimits"].nofile = {"Name":"nofile","Soft":$nf,"Hard":$nf}' \
+       .["default-ulimits"].nofile = {"Name":"nofile","Soft":$nofile_input,"Hard":$nofile_input}' \
       >/etc/docker/daemon.json
   else
     echo "$existing" | jq \
@@ -304,7 +311,7 @@ EOF
       --argjson ipv6 false \
       --argjson nf "$nofile_input" \
       '.mtu=$mtu | .ipv6=false | del(.ip6tables) | del(.["fixed-cidr-v6"]) |
-       .["default-ulimits"].nofile = {"Name":"nofile","Soft":$nf,"Hard":$nf}' \
+       .["default-ulimits"].nofile = {"Name":"nofile","Soft":$nofile_input,"Hard":$nofile_input}' \
       >/etc/docker/daemon.json
   fi
   # 套用設定（盡量嘗試，不讓腳本卡住）
@@ -324,7 +331,7 @@ main(){
   echo "7) Docker 調優（daemon.json：MTU/IPv6、default-ulimits nofile、服務 LimitNOFILE）"
   echo "0) 結束"
   while :; do
-    read -rp "請選擇要執行的項目： " sel
+    read -p "請選擇要執行的項目： " sel
     case "$sel" in
       1) set_root_password_and_ssh ;;
       2) configure_static_ip_last_octet ;;
