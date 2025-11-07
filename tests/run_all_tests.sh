@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+export PROJECT_ROOT
 
 # 顏色定義
 RED='\033[0;31m'
@@ -54,6 +55,13 @@ CONFIG_FILE="$SCRIPT_DIR/test-config.ini"
 OUTPUT_FILE=""
 TEST_TYPE="all"
 
+# 測試啟用預設值
+UNIT_ENABLED="true"
+INTEGRATION_ENABLED="true"
+E2E_ENABLED="true"
+PERFORMANCE_ENABLED="false"
+SECURITY_ENABLED="false"
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
@@ -89,26 +97,115 @@ while [[ $# -gt 0 ]]; do
 done
 
 # 日誌函數
+write_log_output() {
+    local level="$1"
+    local message="$2"
+
+    if [[ -n "$OUTPUT_FILE" ]]; then
+        printf '[%s] %s\n' "$level" "$message" >> "$OUTPUT_FILE"
+    fi
+}
+
 log_info() {
     if ! $QUIET; then
         echo -e "${BLUE}[INFO]${NC} $1"
+        write_log_output "INFO" "$1"
+    else
+        write_log_output "INFO" "$1"
     fi
 }
 
 log_success() {
     if ! $QUIET; then
         echo -e "${GREEN}[PASS]${NC} $1"
+        write_log_output "PASS" "$1"
+    else
+        write_log_output "PASS" "$1"
     fi
 }
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1" >&2
+    write_log_output "ERROR" "$1"
 }
 
 log_warning() {
     if ! $QUIET; then
         echo -e "${YELLOW}[WARN]${NC} $1"
+        write_log_output "WARN" "$1"
+    else
+        write_log_output "WARN" "$1"
     fi
+}
+
+log_verbose() {
+    if $VERBOSE && ! $QUIET; then
+        echo -e "${BLUE}[DEBUG]${NC} $1"
+        write_log_output "DEBUG" "$1"
+    elif $VERBOSE; then
+        write_log_output "DEBUG" "$1"
+    fi
+}
+
+parse_bool_from_ini() {
+    local file="$1"
+    local key="$2"
+    local default_value="$3"
+
+    if [[ ! -f "$file" ]]; then
+        echo "$default_value"
+        return
+    fi
+
+    local parsed_value
+    parsed_value=$(awk -F'=' -v key="$key" '
+        BEGIN {IGNORECASE = 1}
+        /^[[:space:]]*#/ {next}
+        /^[[:space:]]*$/ {next}
+        {
+            gsub(/^[[:space:]]+/, "", $1)
+            gsub(/[[:space:]]+$/, "", $1)
+            gsub(/^[[:space:]]+/, "", $2)
+            gsub(/[[:space:]]+$/, "", $2)
+        }
+        tolower($1) == tolower(key) {print tolower($2)}
+    ' "$file" | tail -1)
+
+    if [[ -z "$parsed_value" ]]; then
+        echo "$default_value"
+        return
+    fi
+
+    case "$parsed_value" in
+        true|yes|1)
+            echo "true"
+            ;;
+        false|no|0)
+            echo "false"
+            ;;
+        *)
+            echo "$default_value"
+            ;;
+    esac
+}
+
+load_config() {
+    local file="$1"
+
+    if [[ ! -f "$file" ]]; then
+        log_warning "配置文件不存在，使用預設值 / Config file not found, using defaults: $file"
+        return
+    fi
+
+    log_info "讀取配置文件: $file"
+
+    UNIT_ENABLED=$(parse_bool_from_ini "$file" "unit_tests" "$UNIT_ENABLED")
+    INTEGRATION_ENABLED=$(parse_bool_from_ini "$file" "integration_tests" "$INTEGRATION_ENABLED")
+    E2E_ENABLED=$(parse_bool_from_ini "$file" "e2e_tests" "$E2E_ENABLED")
+    PERFORMANCE_ENABLED=$(parse_bool_from_ini "$file" "performance_tests" "$PERFORMANCE_ENABLED")
+    SECURITY_ENABLED=$(parse_bool_from_ini "$file" "security_tests" "$SECURITY_ENABLED")
+
+    log_verbose "測試配置: unit=$UNIT_ENABLED, integration=$INTEGRATION_ENABLED, e2e=$E2E_ENABLED, performance=$PERFORMANCE_ENABLED, security=$SECURITY_ENABLED"
 }
 
 # 檢查依賴項
@@ -266,31 +363,81 @@ main() {
     # WSL 環境檢查和警告
     wsl_warning
 
+    if [[ -n "$OUTPUT_FILE" ]]; then
+        mkdir -p "$(dirname "$OUTPUT_FILE")"
+        : > "$OUTPUT_FILE"
+        log_verbose "測試輸出也會寫入文件 / Test output will also be written to: $OUTPUT_FILE"
+    fi
+
+    log_verbose "專案根目錄 / Project root: $PROJECT_ROOT"
+
+    # 讀取測試配置
+    load_config "$CONFIG_FILE"
+
     local overall_result=0
 
     # 根據測試類型運行相應測試
     case "$TEST_TYPE" in
         unit)
+            if [[ "$UNIT_ENABLED" != "true" ]]; then
+                log_warning "配置中禁用了單元測試，但因使用者指令仍會執行 / Unit tests disabled in config, running due to explicit request"
+            fi
             run_unit_tests || overall_result=1
             ;;
         integration)
+            if [[ "$INTEGRATION_ENABLED" != "true" ]]; then
+                log_warning "配置中禁用了集成測試，但因使用者指令仍會執行 / Integration tests disabled in config, running due to explicit request"
+            fi
             run_integration_tests || overall_result=1
             ;;
         e2e)
+            if [[ "$E2E_ENABLED" != "true" ]]; then
+                log_warning "配置中禁用了端到端測試，但因使用者指令仍會執行 / E2E tests disabled in config, running due to explicit request"
+            fi
             run_e2e_tests || overall_result=1
             ;;
         performance)
+            if [[ "$PERFORMANCE_ENABLED" != "true" ]]; then
+                log_warning "配置中禁用了性能測試，但因使用者指令仍會執行 / Performance tests disabled in config, running due to explicit request"
+            fi
             run_performance_tests || overall_result=1
             ;;
         security)
+            if [[ "$SECURITY_ENABLED" != "true" ]]; then
+                log_warning "配置中禁用了安全測試，但因使用者指令仍會執行 / Security tests disabled in config, running due to explicit request"
+            fi
             run_security_tests || overall_result=1
             ;;
         all)
-            run_unit_tests || overall_result=1
-            run_integration_tests || overall_result=1
-            run_e2e_tests || overall_result=1
-            run_performance_tests || overall_result=1
-            run_security_tests || overall_result=1
+            if [[ "$UNIT_ENABLED" == "true" ]]; then
+                run_unit_tests || overall_result=1
+            else
+                log_info "跳過單元測試 (在配置中禁用) / Skipping unit tests (disabled in config)"
+            fi
+
+            if [[ "$INTEGRATION_ENABLED" == "true" ]]; then
+                run_integration_tests || overall_result=1
+            else
+                log_info "跳過集成測試 (在配置中禁用) / Skipping integration tests (disabled in config)"
+            fi
+
+            if [[ "$E2E_ENABLED" == "true" ]]; then
+                run_e2e_tests || overall_result=1
+            else
+                log_info "跳過端到端測試 (在配置中禁用) / Skipping e2e tests (disabled in config)"
+            fi
+
+            if [[ "$PERFORMANCE_ENABLED" == "true" ]]; then
+                run_performance_tests || overall_result=1
+            else
+                log_info "跳過性能測試 (在配置中禁用) / Skipping performance tests (disabled in config)"
+            fi
+
+            if [[ "$SECURITY_ENABLED" == "true" ]]; then
+                run_security_tests || overall_result=1
+            else
+                log_info "跳過安全測試 (在配置中禁用) / Skipping security tests (disabled in config)"
+            fi
             ;;
         *)
             log_error "未知的測試類型: $TEST_TYPE"

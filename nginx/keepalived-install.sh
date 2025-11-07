@@ -224,4 +224,3 @@ echo "目前本機角色推斷：$ROLE"
 echo "本機 IP：$SRC_IP  對端 IP：$PEER_IP  VIP：$VIP  IFACE：$IFACE  PRIORITY：$PRIORITY"
 echo "檢查 VIP： ip addr | grep -F \"${VIP%%/*}\""
 echo "切換測試： systemctl stop nginx   # 應於 1~2 秒內漂移到對端"
-

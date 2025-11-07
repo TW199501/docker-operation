@@ -1,34 +1,30 @@
 services:
-  cloudflare-tunnel:
-    image: cloudflare/cloudflared:latest              # 拉取最新版本的 Cloudflare Tunnel 映像
-    container_name: cloudflare-tunnel                 # Cloudflare Tunnel 容器的名稱
-    hostname: cloudflare-tunnel                       # Cloudflare Tunnel 容器的主機名稱
-    restart: unless-stopped                           # 除非手動停止，否則重新啟動容器
-    logging:
-      driver: "json-file"                             # 使用預設的 json-file 日誌記錄驅動程式
-      options:
-        max-size: "100m"                              # 輪替前的最大日誌檔案大小 (100 MB)
-        max-file: "10"                                # 要保留的最大日誌檔案數量 (10)
-    network_mode: "host"                              # 使用主機網路 (主機和容器之間沒有隔離)
-    command: tunnel run                               # 啟動 Cloudflare tunnel 的命令
-    volumes:
-      - /etc/localtime:/etc/localtime:ro              # 與主機同步時間
-      - ./config/hosts:/etc/hosts                     # 將 hosts 檔案從主機掛載到容器
-    environment:
-      - "TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}"     # 從環境變數傳遞 Cloudflare Tunnel 權杖
-    healthcheck:
-      test: ["CMD", "cloudflared", "--version"]       # 檢查 cloudflared version 命令是否正常運作
-      interval: 30s                                   # 健康檢查嘗試之間的間隔時間
-      timeout: 10s                                    # 等待回應的時間
-      retries: 3                                      # 標記為不健康之前的重試次數
-      start_period: 10s                               # 健康檢查開始前的延遲時間
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"  # 使用 Watchtower 啟用自動更新
-
-  watchtower:
-    image: containrrr/watchtower:latest               # Watchtower 映像，負責自動更新容器
-    container_name: watchtower                        # Watchtower 容器名稱
-    restart: unless-stopped                           # 除非手動停止，否則重新啟動容器
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock     # 掛載 Docker socket 以便監控容器
-    command: --cleanup --label-enable                 # 啟用標籤模式並清理舊映像
+    cloudflare-tunnel:
+        image: cloudflare/cloudflared:latest
+        container_name: cloudflare-tunnel
+        restart: unless-stopped
+        command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+        volumes:
+            - /etc/localtime:/etc/localtime:ro
+        # 若需要自訂名稱解析，用這個，不要覆蓋 /etc/hosts
+        # extra_hosts:
+        #   - "nginxwebui.local:192.168.25.101"
+        healthcheck:
+            test:
+                - CMD
+                - cloudflared
+                - --version
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
+        labels:
+            - com.centurylinklabs.watchtower.enable=true
+    watchtower:
+        image: containrrr/watchtower:latest
+        container_name: watchtower
+        restart: unless-stopped
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+        command: --cleanup --interval 300
+networks: {}

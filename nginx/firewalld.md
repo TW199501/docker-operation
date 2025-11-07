@@ -1,4 +1,11 @@
+# 安裝並啟用
+
+```bash
+sudo dnf install -y firewalld
+sudo systemctl enable --now firewalld
 ```
+
+```bash
 
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/00-preflight-nginx.sh)"
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/10-build-nginx.sh)"
@@ -7,16 +14,9 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/a87-unified-nginx-network.sh)"
 ```
 
-# 安裝並啟用
-
-```
-sudo dnf install -y firewalld
-sudo systemctl enable --now firewalld
-```
-
 # 1) 建立 Cloudflare 的 ipset（若已存在不會影響）
 
-```
+```bash
 sudo firewall-cmd --permanent --new-ipset=cloudflare4 --type=hash:net 2>/dev/null || true
 sudo firewall-cmd --permanent --new-ipset=cloudflare6 --type=hash:net 2>/dev/null || true
 ```
@@ -30,7 +30,7 @@ curl -fsS https://www.cloudflare.com/ips-v6 | sudo xargs -I{} firewall-cmd --per
 
 # 3) 只允許 Cloudflare 來源打 80/443（其餘來源拒絕）
 
-```
+```bash
 sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source ipset="cloudflare4" port port="80"  protocol="tcp" accept'
 sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source ipset="cloudflare4" port port="443" protocol="tcp" accept'
 sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv6 source ipset="cloudflare6" port port="80"  protocol="tcp" accept'
@@ -39,7 +39,7 @@ sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv6 source ipset="cl
 
 # 4) 內網允許 22/8080（只限 192.168.25.0/24）
 
-```
+```bash
 sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address="192.168.25.0/24" port port="22"   protocol="tcp" accept'
 sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address="192.168.25.0/24" port port="8080" protocol="tcp" accept'
 ```

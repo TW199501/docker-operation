@@ -1,0 +1,30 @@
+{
+    "printWidth": 100,
+    "tabWidth": 2,
+    "useTabs": false,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "bracketSpacing": true,
+    "proseWrap": "preserve",
+    "overrides": [
+        {
+            "files": "*.md",
+            "options": {
+                "proseWrap": "always"
+            }
+        },
+        {
+            "files": ["*.yml", "*.yaml"],
+            "options": {
+                "singleQuote": false
+            }
+        },
+        {
+            "files": ["*.json", "*.jsonc"],
+            "options": {
+                "singleQuote": false
+            }
+        }
+    ]
+}

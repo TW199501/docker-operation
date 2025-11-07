@@ -6,8 +6,10 @@ services:
     container_name: uptime-kuma
     restart: always
     ports:
-      - "3001:3001"  
+      - "3001:3001"
     volumes:
     - ./data:/app/data
     environment:
+      # Time zone for the container, set to Asia/Taipei
+      # See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List_of_time_zones
      - TZ=Asia/Taipei

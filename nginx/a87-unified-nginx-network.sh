@@ -19,6 +19,8 @@ LAN_CIDR="${LAN_CIDR:-192.168.25.0/24}"
 LAN_SSH_PORT="${LAN_SSH_PORT:-22}"
 LAN_EXTRA_PORTS="${LAN_EXTRA_PORTS:-8080}"      # 以空白分隔，可為空字串
 CF_TCP_PORTS="${CF_TCP_PORTS:-80 443}"          # Cloudflare 要放行的 TCP 埠
+ALLOW_LLMNR="${ALLOW_LLMNR:-no}"                # yes: 允許 LAN -> 224.0.0.252:5355
+ALLOW_IGMP="${ALLOW_IGMP:-no}"                  # yes: 允許 IGMP 多播（proto 2）
 
 GEOIP_DIR="${GEOIP_DIR:-/etc/nginx/geoip}"
 CF_LOCAL_TRUST="${CF_LOCAL_TRUST:-127.0.0.1}"    # cloudflared / 本機來源（空白分隔）
@@ -88,6 +90,16 @@ setup_ufw() {
     [[ -z "$p" ]] && continue
     ufw allow from "$LAN_CIDR" to any port "$p" proto tcp
   done
+
+  if [[ "$ALLOW_LLMNR" == "yes" ]]; then
+    echo "  - 允許 LLMNR（UDP 5355 多播）"
+    ufw allow proto udp from "$LAN_CIDR" to 224.0.0.252 port 5355 comment 'LLMNR'
+  fi
+
+  if [[ "$ALLOW_IGMP" == "yes" ]]; then
+    echo "  - 允許 IGMP 多播報文"
+    ufw allow proto 2 from "$LAN_CIDR" to 224.0.0.0/4 comment 'IGMP'
+  fi
 
   echo "  - 清除殘留 Anywhere 規則"
   local -a any_ports=(80 443 "$LAN_SSH_PORT")

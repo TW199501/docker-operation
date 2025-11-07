@@ -73,7 +73,13 @@
   },
 
   // 文件配置 (防止BOM和换行符问题)
+  "files.encoding": "utf8",
   "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "editor.insertSpaces": true,
+  "editor.tabSize": 4,
+  "editor.detectIndentation": false,
   "files.autoGuessEncoding": true,
 
   // YAML 配置
@@ -82,6 +88,11 @@
       "docker-compose*.yml",
       "docker-compose*.yaml"
     ]
+  },
+
+  // Markdown 特殊處理
+  "[markdown]": {
+    "files.trimTrailingWhitespace": false
   },
 
   // 測試配置
@@ -105,5 +116,26 @@
   "dockerOperation.testAllCommand": "cd tests && bash run_all_tests.sh all",
   "dockerOperation.testUnitCommand": "cd tests && bash run_all_tests.sh unit",
   "dockerOperation.testIntegrationCommand": "cd tests && bash run_all_tests.sh integration",
-  "dockerOperation.testE2eCommand": "cd tests && bash run_all_tests.sh e2e"
+  "dockerOperation.testE2eCommand": "cd tests && bash run_all_tests.sh e2e",
+
+  // Prettier 配置
+  // 讓 VS Code 儲存時自動格式化
+  "editor.formatOnSave": true,
+
+  // 全域預設使用 Prettier
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  // 僅在專案有設定時才啟用（避免跟其他專案衝突）
+  "prettier.requireConfig": true,
+
+  // 讓 Prettier 讀取 .editorconfig（通常保持預設即可）
+  "prettier.useEditorConfig": true,
+
+  // 避免用全域 Prettier，加速與穩定（維持 false）
+  "prettier.resolveGlobalModules": false,
+
+  // 針對 shell：不要用 Prettier（交給 shfmt）
+  "[shellscript]": {
+    "editor.defaultFormatter": null  // 使用語言預設格式化工具，避免無效擴充套件
+  }
 }

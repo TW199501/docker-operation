@@ -1,0 +1,39 @@
+services:
+  nginx-ui:
+    image: uozi/nginx-ui:dev
+    container_name: nginx-ui
+    restart: always
+    networks:
+      - nginx-ui-network
+    environment:
+      - NGINX_UI_NODE_DEMO=true
+      - NGINX_UI_SERVER_HOST=0.0.0.0
+      - NGINX_UI_SERVER_PORT=9860
+      - NGINX_UI_NGINX_CONFIG_DIR=/etc/nginx
+      - NGINX_UI_AUTH_MAX_ATTEMPTS=5
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "9860:9860"
+    volumes:
+      - /opt/nginx-ui/nginx-configs:/etc/nginx/sites-available
+      - /opt/nginx-ui/app.ini:/etc/nginx-ui/app.ini:ro
+      - /opt/nginx-ui/nginx-ui-data:/etc/nginx-ui
+      - /opt/nginx-ui/:/etc/nginx-ui
+      - /opt/nginx-ui/logs:/var/log/nginx
+      - /opt/nginx-ui/run:/var/run
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  nginx-ui-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: 'true'
+
+
+
+
+
+
