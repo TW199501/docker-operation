@@ -26,7 +26,9 @@ if pgrep -x nginx >/dev/null; then
     sudo pkill -TERM -x nginx || true
   fi
   sleep 3
-  pgrep -x nginx >/dev/null && sudo pkill -KILL -x nginx || true
+  if pgrep -x nginx >/dev/null; then
+    sudo pkill -KILL -x nginx || true
+  fi
 fi
 sudo rm -f /run/nginx.pid || true
 
@@ -209,6 +211,37 @@ if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules\.d/\*\.conf;?'
   echo ">> 在 /etc/nginx/nginx.conf 最上方加入 include modules.d"
   sudo sed -i '1i include /etc/nginx/modules.d/*.conf;' /etc/nginx/nginx.conf
 fi
+if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/sites-enabled/\*;?' /etc/nginx/nginx.conf; then
+  echo ">> 在 nginx.conf http{} 內加入 sites-enabled include"
+  if sudo grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/conf\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
+    sudo sed -i '/^[[:space:]]*include[[:space:]]\+\/etc\/nginx\/conf\.d\/\*\.conf;\?/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
+  else
+    sudo sed -i '/^[[:space:]]*http[[:space:]]*{/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
+  fi
+fi
+
+if [ ! -f /etc/nginx/sites-available/default.conf ]; then
+  echo ">> 建立 /etc/nginx/sites-available/default.conf 範例"
+  sudo tee /etc/nginx/sites-available/default.conf >/dev/null <<'NG'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    root /var/www/html;
+    index index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+NG
+fi
+
+if [ ! -e /etc/nginx/sites-enabled/default.conf ]; then
+  echo ">> 建立 sites-enabled 預設符號連結"
+  sudo ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
+fi
 
 # 驗證
 sudo nginx -t
@@ -224,6 +257,7 @@ sudo wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "https://github.com/P3TER
 # ===== real_ip 初始化 =====
 echo ">> 初始化 Cloudflare real_ip 與 conf.d"
 sudo mkdir -p /etc/nginx/conf.d
+sudo install -d -m 0755 /etc/nginx/sites-available /etc/nginx/sites-enabled
 TMP_CF="$(mktemp -d)"; trap 'rm -rf "$TMP_CF"' EXIT
 curl -fsSL --retry 3 https://www.cloudflare.com/ips-v4 | awk '{print "set_real_ip_from " $1 ";"}' > "$TMP_CF/cloudflare_v4_realip.conf"
 curl -fsSL --retry 3 https://www.cloudflare.com/ips-v6 | awk '{print "set_real_ip_from " $1 ";"}' > "$TMP_CF/cloudflare_v6_realip.conf"
@@ -254,7 +288,9 @@ NG
 # 確保 conf.d 有被載入（若現有配置壞掉，回寫安全基底）
 write_base_nginx_conf() {
   local NOW; NOW="$(date +%F_%H%M%S)"
-  [ -f /etc/nginx/nginx.conf ] && sudo cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.$NOW" || true
+  if [ -f /etc/nginx/nginx.conf ]; then
+    sudo cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.$NOW" || true
+  fi
   sudo tee /etc/nginx/nginx.conf >/dev/null <<'NG'
 include /etc/nginx/modules.d/*.conf;
 
@@ -271,6 +307,7 @@ http {
 
     # 請把所有 server{} 與 http 層設定放到這裡
     include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
 
     access_log /var/log/nginx/access.log;
     error_log  /var/log/nginx/error.log;
@@ -402,8 +439,12 @@ if [ "${UFW_BASELINE:-yes}" = "yes" ]; then
   if ! command -v ufw >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
       echo ">> 未偵測到 UFW，正在安裝..."
-      sudo apt-get update -y && sudo apt-get install -y ufw \
-        || { echo "!! UFW 安裝失敗，跳過 UFW 基線"; UFW_BASELINE="no"; }
+      if sudo apt-get update -y && sudo apt-get install -y ufw; then
+        :
+      else
+        echo "!! UFW 安裝失敗，跳過 UFW 基線"
+        UFW_BASELINE="no"
+      fi
     else
       echo "!! 非 apt 系統且未安裝 UFW，跳過 UFW 基線"; UFW_BASELINE="no"
     fi
@@ -414,7 +455,9 @@ if [ "$UFW_BASELINE" = "yes" ] && command -v ufw >/dev/null 2>&1; then
   echo ">> 套用 UFW 基線（80/443 對外；22/8080 只 $LAN_CIDR）"
 
   # 開啟 IPv6 支援（若設定檔存在）
-  [ -f /etc/default/ufw ] && sudo sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw || true
+  if [ -f /etc/default/ufw ]; then
+    sudo sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw || true
+  fi
 
   # 基線策略
   sudo ufw default deny incoming

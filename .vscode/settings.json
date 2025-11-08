@@ -1,7 +1,8 @@
 {
   // General Settings
-  "editor.fontFamily": "'Fira Code', Consolas, 'Courier New', monospace",
+  "editor.fontFamily": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace",
   "editor.fontLigatures": true,
+  "editor.fontWeight": "normal",
   "mssql.maxRecentConnections": 5,
   "mssql.enableRichExperiences": true,
   "mssql.openQueryResultsInTabByDefault": false,
@@ -98,6 +99,17 @@
   // 測試配置
   "testExplorer.useNativeTesting": true,
   "testExplorer.addToEditorContextMenu": true,
+  "python.testing.unittestEnabled": true,
+  "python.testing.pytestEnabled": false,
+  "python.testing.nosetestsEnabled": false,
+  "python.testing.unittestArgs": [
+    "-v",
+    "-s",
+    "tests/python",
+    "-p",
+    "test_*.py"
+  ],
+  "python.testing.cwd": "${workspaceFolder}",
 
   // 終端配置 (Windows PowerShell)
   "terminal.integrated.shell.windows": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
@@ -137,5 +149,7 @@
   // 針對 shell：不要用 Prettier（交給 shfmt）
   "[shellscript]": {
     "editor.defaultFormatter": null  // 使用語言預設格式化工具，避免無效擴充套件
-  }
+},
+"editor.fontSize": 14,
+"editor.fontVariations": false
 }

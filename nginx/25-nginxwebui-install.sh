@@ -25,8 +25,16 @@ if ! command -v java >/dev/null 2>&1; then
     sudo mkdir -p /etc/apt/keyrings
     curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public \
       | sudo tee /etc/apt/keyrings/adoptium.asc >/dev/null
-    . /etc/os-release
-    CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+  CODENAME=""
+    if [ -r /etc/os-release ]; then
+      # shellcheck disable=SC1091
+      # shellcheck source=/etc/os-release
+      . /etc/os-release
+      CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+    fi
+    if [ -z "$CODENAME" ]; then
+      CODENAME="$(lsb_release -cs 2>/dev/null || echo "focal")"
+    fi
     echo "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb ${CODENAME} main" \
       | sudo tee /etc/apt/sources.list.d/adoptium.list >/dev/null
     sudo apt-get update -y

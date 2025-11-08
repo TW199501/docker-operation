@@ -1,5 +1,5 @@
 #!/bin/sh
-# Automate SQL Server container setup using docker compose v2.
+# 使用 docker compose v2 自動設定 SQL Server 容器
 
 set -eu
 
@@ -14,9 +14,9 @@ DEFAULT_COLLATION="Chinese_Taiwan_Stroke_CI_AS"
 DEFAULT_CPU_LIMIT=""
 DEFAULT_CPU_RESERVE=""
 DEFAULT_MEM_LIMIT=""
-DEFAULT_DATA_DIR="${SCRIPT_DIR}/data"
-DEFAULT_LOG_DIR="${SCRIPT_DIR}/log"
-DEFAULT_BACKUP_DIR="${SCRIPT_DIR}/backup"
+DATA_DIR="${DATA_DIR:-"$SCRIPT_DIR/data"}"
+LOG_DIR="${LOG_DIR:-"$SCRIPT_DIR/log"}"
+BACKUP_DIR="${BACKUP_DIR:-"$SCRIPT_DIR/backup"}"
 DEFAULT_CERT_DIR="${SCRIPT_DIR}/cert"
 DEFAULT_CERT_MODE="ro"
 DEFAULT_DNS=""

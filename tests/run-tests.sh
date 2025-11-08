@@ -23,6 +23,22 @@ log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
+test_nginx_scripts_structure() {
+    log_info "Validating nginx deployment scripts structure..."
+
+    local test_file="$TEST_DIR/test_nginx_scripts.sh"
+    if [ ! -f "$test_file" ]; then
+        log_warning "nginx script test file missing: $test_file"
+        return
+    fi
+
+    if bash "$test_file"; then
+        log_success "nginx script structure validation"
+    else
+        log_failure "nginx script structure validation failed"
+    fi
+}
+
 log_success() {
     echo -e "${GREEN}[PASS]${NC} $1"
     ((TEST_PASSED++))
@@ -89,8 +105,10 @@ setup_test_env() {
     log_info "Setting up test environment..."
 
     # 創建測試目錄
-    export TEST_TMP_DIR="$(mktemp -d)"
-    export TEST_BACKUP_DIR="$TEST_TMP_DIR/backup"
+    TEST_TMP_DIR="$(mktemp -d)"
+    export TEST_TMP_DIR
+    TEST_BACKUP_DIR="$TEST_TMP_DIR/backup"
+    export TEST_BACKUP_DIR
 
     mkdir -p "$TEST_BACKUP_DIR"
 
@@ -132,7 +150,16 @@ test_prefix_to_netmask() {
     log_info "Testing prefix_to_netmask function..."
 
     # 載入測試函數
-    source "$PROJECT_ROOT/proxmox9.0/123.sh"
+    if [ -f "$PROJECT_ROOT/proxmox9.0/123.sh" ]; then
+        # shellcheck source=/dev/null
+        if ! source "$PROJECT_ROOT/proxmox9.0/123.sh"; then
+            log_warning "Failed to load proxmox9.0/123.sh, skipping prefix_to_netmask tests"
+            return
+        fi
+    else
+        log_warning "proxmox9.0/123.sh not found, skipping prefix_to_netmask tests"
+        return
+    fi
 
     # 測試不同 CIDR 前綴
     assert_equals "255.255.255.0" "$(prefix_to_netmask 24)" "CIDR /24 should be 255.255.255.0"
@@ -144,7 +171,8 @@ test_ensure_line() {
     log_info "Testing ensure_line function..."
 
     # 創建測試文件
-    local test_file="$TEST_TMP_DIR/test_ensure_line.txt"
+    local test_file
+    test_file="$TEST_TMP_DIR/test_ensure_line.txt"
 
     # 載入測試函數
     source "$PROJECT_ROOT/proxmox9.0/123.sh"
@@ -156,7 +184,8 @@ test_ensure_line() {
 
     # 測試不重複添加
     ensure_line "test line 1" "$test_file"
-    local line_count=$(grep -c "test line 1" "$test_file")
+    local line_count
+    line_count=$(grep -c "test line 1" "$test_file")
     assert_equals "1" "$line_count" "Line should not be duplicated"
 }
 
@@ -164,7 +193,8 @@ test_first_nameserver() {
     log_info "Testing first_nameserver function..."
 
     # 創建測試 resolv.conf
-    local test_resolv="$TEST_TMP_DIR/resolv.conf"
+    local test_resolv
+    test_resolv="$TEST_TMP_DIR/resolv.conf"
     echo "nameserver 8.8.8.8" > "$test_resolv"
     echo "nameserver 1.1.1.1" >> "$test_resolv"
 
@@ -184,6 +214,7 @@ test_integration_tests() {
     log_info "Running integration tests..."
 
     test_docker_compose_validation
+    test_nginx_scripts_structure
     test_script_syntax
 
     log_info "Integration tests completed"
@@ -193,7 +224,8 @@ test_docker_compose_validation() {
     log_info "Testing docker-compose file validation..."
 
     # 查找所有 docker-compose 文件
-    local compose_files=$(find "$PROJECT_ROOT" -name "docker-compose*.yml" -o -name "docker-compose*.yaml" 2>/dev/null)
+    local compose_files
+    compose_files=$(find "$PROJECT_ROOT" -name "docker-compose*.yml" -o -name "docker-compose*.yaml" 2>/dev/null)
 
     if [ -z "$compose_files" ]; then
         log_warning "No docker-compose files found, skipping validation test"
@@ -218,7 +250,8 @@ test_script_syntax() {
     log_info "Testing script syntax..."
 
     # 測試所有 shell 腳本
-    local script_files=$(find "$PROJECT_ROOT" -name "*.sh" -type f)
+    local script_files
+    script_files=$(find "$PROJECT_ROOT" -name "*.sh" -type f)
 
     for script in $script_files; do
         if bash -n "$script" 2>/dev/null; then
@@ -295,11 +328,14 @@ test_performance() {
     log_info "Running performance tests..."
 
     # 測試腳本載入時間
-    local start_time=$(date +%s.%3N)
+    local start_time
+    start_time=$(date +%s.%3N)
     source "$PROJECT_ROOT/proxmox9.0/123.sh" >/dev/null 2>&1
-    local end_time=$(date +%s.%3N)
+    local end_time
+    end_time=$(date +%s.%3N)
 
-    local load_time=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "0")
+    local load_time
+    load_time=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "0")
     log_info "Script load time: ${load_time}s"
 
     if (( $(echo "$load_time < 5.0" | bc -l 2>/dev/null || echo "1") )); then

@@ -9,6 +9,7 @@
 # 可透過環境變數覆寫的設定參數請參考下方預設變數區。
 # ============================================================================
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ----- 可調整參數（都可用環境變數覆寫）-----
 ENABLE_UFW="${ENABLE_UFW:-auto}"              # auto|yes|no
@@ -192,6 +193,11 @@ echo "[OK] UFW Cloudflare rules synced."
 BASH
   chmod +x /usr/local/sbin/ufw-cf-sync.sh
 
+  if [[ -f "$SCRIPT_DIR/ufw-cf-allow.sh" ]]; then
+    echo "  - 佈署 repo 版 ufw-cf-allow.sh 至 /usr/local/sbin"
+    install -m 0755 "$SCRIPT_DIR/ufw-cf-allow.sh" /usr/local/sbin/ufw-cf-allow.sh
+  fi
+
   echo "  - 首次同步 Cloudflare 網段"
   /usr/local/sbin/ufw-cf-sync.sh || true
 
@@ -219,7 +225,14 @@ setup_firewalld() {
   fi
 
   install -d -m 0755 /usr/local/sbin
-  cat >/usr/local/sbin/firewalld-cf-sync.sh <<'BASH'
+
+  local firewalld_sync_bin="/usr/local/sbin/firewalld-cf-sync.sh"
+  if [[ -f "$SCRIPT_DIR/update_cf_ip.sh" ]]; then
+    firewalld_sync_bin="/usr/local/sbin/update_cf_ip.sh"
+    echo "  - 佈署 repo 版 update_cf_ip.sh 至 /usr/local/sbin"
+    install -m 0755 "$SCRIPT_DIR/update_cf_ip.sh" "$firewalld_sync_bin"
+  else
+    cat >/usr/local/sbin/firewalld-cf-sync.sh <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
 v4=$(mktemp)
@@ -241,14 +254,15 @@ xargs -r -I{} firewall-cmd --permanent --ipset=cloudflare6 --add-entry={} <"$v6"
 firewall-cmd --reload
 echo "[OK] firewalld Cloudflare ipsets synced."
 BASH
-  chmod +x /usr/local/sbin/firewalld-cf-sync.sh
+    chmod +x /usr/local/sbin/firewalld-cf-sync.sh
+  fi
 
   echo "  - 首次同步 Cloudflare ipset"
-  /usr/local/sbin/firewalld-cf-sync.sh || true
+  "$firewalld_sync_bin" || true
 
   ensure_log_dir
   install_cron_job "firewalld-cf-sync" "$FIREWALLD_CRON_SPEC" \
-    "/usr/local/sbin/firewalld-cf-sync.sh >$LOG_DIR/firewalld-cf-sync.log 2>&1"
+    "$firewalld_sync_bin >$LOG_DIR/firewalld-cf-sync.log 2>&1"
 }
 
 setup_geoip2() {
@@ -291,6 +305,11 @@ setup_geoip2() {
     done
   } >"$tmp/cloudflared_realip.conf"
   install -m 0644 "$tmp/cloudflared_realip.conf" "$GEOIP_DIR/cloudflared_realip.conf"
+
+  if [[ -f "$SCRIPT_DIR/update_geoip2_cf_ip.sh" ]]; then
+    echo "  - 佈署 repo 版 update_geoip2_cf_ip.sh 至 /usr/local/sbin"
+    install -m 0755 "$SCRIPT_DIR/update_geoip2_cf_ip.sh" /usr/local/sbin/update_geoip2_cf_ip.sh
+  fi
 
   cat >/usr/local/sbin/update_geoip2.sh <<'UPD'
 #!/usr/bin/env bash
@@ -373,7 +392,7 @@ fi
 
 reload_cron_if_needed
 
-echo "\n=== 完成 ==="
+echo "完成"
 [[ "$ENABLE_UFW" == "yes" ]] && echo "  • UFW Cloudflare 同步排程：$UFW_CRON_SPEC"
 [[ "$ENABLE_FIREWALLD" == "yes" ]] && echo "  • firewalld Cloudflare 同步排程：$FIREWALLD_CRON_SPEC"
 [[ "$ENABLE_NGINX_GEOIP" == "yes" ]] && echo "  • nginx GeoIP2 更新排程：$GEOIP_CRON_SPEC"

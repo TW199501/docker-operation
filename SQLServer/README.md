@@ -1,4 +1,4 @@
-## SQL Server Docker 部署指南
+# SQL Server Docker 部署指南
 
 提供兩種方式快速部署 SQL Server 2022：
 
@@ -7,17 +7,14 @@
 
 ---
 
-### 目錄
+## 目錄
 
-1. [快速開始（互動式腳本）](#1-快速開始互動式腳本)
-2. [腳本下載一覽（選用）](#2-腳本下載一覽選用)
-3. [手動部署步驟](#3-手動部署步驟)
-4. [已運行容器的權限修正](#4-已運行容器的權限修正)
-5. [檢查與驗證](#5-檢查與驗證)
+1. [快速開始（互動式腳本）](#快速開始互動式腳本)
+2. [腳本下載一覽（選用）](#腳本下載一覽選用)
 
 ---
 
-### 1. 快速開始（互動式腳本）
+## 快速開始（互動式腳本）
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/SQLServer/bootstrap-sqlserver.sh)"
@@ -42,13 +39,16 @@ sudo ./bootstrap-sqlserver.sh
 
 ---
 
-### 2. 腳本下載一覽（選用）
+## 腳本下載一覽（選用）
 
 - 最新 `docker-compose.yml`（需搭配 `.env` 使用）：
+
   ```bash
   curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/SQLServer/docker-compose.yml -o docker-compose.yml
   ```
+
 - 單獨產生 SA 密碼：
+
   ```bash
   curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/SQLServer/generate-sa-password.sh -o generate-sa-password.sh
   chmod +x generate-sa-password.sh

@@ -10,7 +10,7 @@
       "args": []
     },
     {
-      "name": "調試測試腳本 (所有測試)",
+      "name": "所有測試",
       "type": "bashdb",
       "request": "launch",
       "program": "${workspaceFolder}/tests/run_all_tests.sh",
@@ -21,7 +21,7 @@
       "trace": "verbose"
     },
     {
-      "name": "調試測試腳本 (單元測試)",
+      "name": "單元測試",
       "type": "bashdb",
       "request": "launch",
       "program": "${workspaceFolder}/tests/run_all_tests.sh",
@@ -30,7 +30,7 @@
       "terminalKind": "integrated"
     },
     {
-      "name": "調試測試腳本 (集成測試)",
+      "name": "集成測試",
       "type": "bashdb",
       "request": "launch",
       "program": "${workspaceFolder}/tests/run_all_tests.sh",
@@ -39,7 +39,7 @@
       "terminalKind": "integrated"
     },
     {
-      "name": "調試單個 Shell 腳本",
+      "name": "測試單個 Shell 腳本",
       "type": "bashdb",
       "request": "launch",
       "program": "${file}",

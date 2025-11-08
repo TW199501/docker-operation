@@ -6,14 +6,16 @@
 
 ## 測試結構
 
-```
+```text
 tests/
 ├── run_all_tests.sh          # 主測試運行器
 ├── run-tests.sh              # 完整測試框架 (舊版)
 ├── test-config.ini           # 測試配置
 ├── test_prefix_to_netmask.sh # 單元測試示例
 ├── test_docker_compose.sh    # 集成測試示例
-└── test_e2e.sh              # 端到端測試
+├── test_e2e.sh              # 端到端測試
+└── python/
+    └── test_nginx_scripts.py # VS Code 測試面板用的 Python 測試包裝
 ```
 
 ## 快速開始
@@ -44,6 +46,7 @@ bash run_all_tests.sh -v all
 ## 測試類型說明
 
 ### 1. 單元測試 (Unit Tests)
+
 - **目的**: 測試個別函數和組件的正確性
 - **示例**: `test_prefix_to_netmask.sh`
 - **測試內容**:
@@ -52,6 +55,7 @@ bash run_all_tests.sh -v all
   - 數學計算函數
 
 ### 2. 集成測試 (Integration Tests)
+
 - **目的**: 測試組件間的交互
 - **示例**: `test_docker_compose.sh`
 - **測試內容**:
@@ -60,6 +64,7 @@ bash run_all_tests.sh -v all
   - 配置文件一致性
 
 ### 3. 端到端測試 (E2E Tests)
+
 - **目的**: 測試完整的工作流程
 - **示例**: `test_e2e.sh`
 - **測試內容**:
@@ -69,12 +74,24 @@ bash run_all_tests.sh -v all
   - 文檔完整性
 
 ### 4. 性能測試 (Performance Tests)
+
 - **目的**: 測試系統性能指標
 - **狀態**: 計劃中
 
 ### 5. 安全測試 (Security Tests)
+
 - **目的**: 檢查安全漏洞和配置
 - **狀態**: 計劃中
+
+### 6. VS Code 測試面板整合
+
+- **目的**: 讓 VS Code Testing UI 可直接執行 Bash 測試
+- **實作**: 透過 `tests/python/test_nginx_scripts.py` 使用 `unittest` 呼叫 `run_all_tests.sh`
+- **使用方式**:
+  1. 安裝 VS Code Python 擴充，並在命令面板執行 `Python: Configure Tests`
+  2. 選擇 `unittest` → 專案根目錄 → `tests/python`
+  3. Testing 面板會出現 `TestNginxScripts`，可個別執行 `test_all` / `test_unit` / `test_integration`
+  4. 可在 `.vscode/settings.json` 自訂 `python.testing.unittestArgs` 以控制測試目錄
 
 ## 命令行選項
 
@@ -180,21 +197,25 @@ assert_command_success "command" "message"
 ## 測試最佳實踐
 
 ### 1. 測試隔離
+
 - 每個測試應獨立運行
 - 不依賴外部狀態
 - 清理測試產物
 
 ### 2. 測試命名
+
 - 使用描述性名稱
 - 遵循 `test_*.sh` 命名約定
 - 包含測試目的
 
 ### 3. 錯誤處理
+
 - 使用適當的退出代碼
 - 提供有意義的錯誤消息
 - 不隱藏重要錯誤
 
 ### 4. 性能考慮
+
 - 測試應快速運行
 - 避免不必要的延遲
 - 並行運行獨立測試
@@ -204,11 +225,13 @@ assert_command_success "command" "message"
 ### 常見問題
 
 1. **權限錯誤**
+
    ```bash
    chmod +x tests/*.sh
    ```
 
 2. **依賴項缺失**
+
    ```bash
    sudo apt-get install -y shellcheck docker-compose
    ```
@@ -266,6 +289,7 @@ assert_network_reachable() {
 ## 聯繫與支持
 
 如有測試相關問題，請檢查：
+
 1. GitHub Issues
 2. CI/CD 日誌
 3. 測試輸出信息

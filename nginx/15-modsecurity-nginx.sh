@@ -88,9 +88,12 @@ make modules -j"$(nproc)"
 # 安裝 .so
 echo "==> 安裝 ngx_http_modsecurity_module.so -> ${NGX_MODULES_DIR}"
 install -d -m 0755 "${NGX_MODULES_DIR}"
-[ -f "objs/ngx_http_modsecurity_module.so" ] \
-  && install -m 0755 "objs/ngx_http_modsecurity_module.so" "${NGX_MODULES_DIR}/" \
-  || { echo "!! 編譯失敗，找不到 objs/ngx_http_modsecurity_module.so"; exit 1; }
+if [ -f "objs/ngx_http_modsecurity_module.so" ]; then
+  install -m 0755 "objs/ngx_http_modsecurity_module.so" "${NGX_MODULES_DIR}/"
+else
+  echo "!! 編譯失敗，找不到 objs/ngx_http_modsecurity_module.so"
+  exit 1
+fi
 
 # ---------- 5) modules.d 載入 ----------
 echo "==> 寫入 /etc/nginx/modules.d/00-load-modules.conf"
@@ -115,11 +118,15 @@ touch "$AUDIT_LOG"
 
 # 解析「目前生效」的 nginx 主設定（若 master 以 -c 啟動，沿用同一路徑）
 ACTIVE_CFG="/etc/nginx/nginx.conf"
-MPID="$(ps ax -o pid=,cmd= | awk '/nginx: master process/{print $1; exit}')"
+MPID=""
+if command -v pgrep >/dev/null 2>&1; then
+  MPID="$(pgrep -f 'nginx: master process' | head -n1 || true)"
+fi
+[ -n "$MPID" ] || MPID="$(ps ax -o pid=,cmd= | awk '/nginx: master process/{print $1; exit}')"
 if [ -n "${MPID:-}" ] && [ -r "/proc/$MPID/cmdline" ]; then
-  CMD="$(tr '\0' ' ' </proc/$MPID/cmdline)"
-  if echo "$CMD" | grep -q -- ' -c '; then
-    ACTIVE_CFG="$(echo "$CMD" | sed -n 's/.* -c \([^ ]\+\).*/\1/p')"
+  CMD="$(tr '\0' ' ' </proc/"$MPID"/cmdline)"
+  if grep -q -- ' -c ' <<<"$CMD"; then
+    ACTIVE_CFG="$(sed -n 's/.* -c \([^ ]\+\).*/\1/p' <<<"$CMD")"
   fi
 fi
 

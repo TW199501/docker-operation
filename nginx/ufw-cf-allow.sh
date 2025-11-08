@@ -6,6 +6,10 @@ LAN_CIDR="${LAN_CIDR:-192.168.25.0/24}"
 LAN_SSH_PORT="${LAN_SSH_PORT:-22}"
 LAN_EXTRA_PORTS=("8080")      # 內網需要放行的其他 TCP 埠
 CF_PORTS=("80" "443")         # 只給 Cloudflare 的埠
+if [[ -n "${CF_PORTS_OVERRIDE:-}" ]]; then
+  # shellcheck disable=SC2206
+  CF_PORTS=(${CF_PORTS_OVERRIDE})
+fi
 UFW_BIN="${UFW_BIN:-/usr/sbin/ufw}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "缺少指令：$1"; exit 1; }; }
@@ -38,7 +42,7 @@ done
 
 # 2) 移除殘留的 Anywhere 規則（80/443/22/8080），避免洩放
 echo "== 清除殘留 Anywhere 規則（80/443/22/8080） =="
-ANY_PORTS=("80" "443" "$LAN_SSH_PORT" "${LAN_EXTRA_PORTS[@]}")
+ANY_PORTS=("${CF_PORTS[@]}" "$LAN_SSH_PORT" "${LAN_EXTRA_PORTS[@]}")
 for p in "${ANY_PORTS[@]}"; do
   mapfile -t DEL_ANY < <($UFW_BIN status numbered | awk -v p="$p/tcp" '
     $0 ~ /^\[/ && $2==p && ($0 ~ /Anywhere/ || $0 ~ /Anywhere \(v6\)/) { gsub(/[\[\]]/,"",$1); print $1 }' | sort -nr)
@@ -54,7 +58,13 @@ set -euo pipefail
 STATE_DIR="/var/lib/ufw-cf"
 CF4_URL="https://www.cloudflare.com/ips-v4"
 CF6_URL="https://www.cloudflare.com/ips-v6"
-PORTS=("80" "443")
+PORTS=(
+BASH
+for port in "${CF_PORTS[@]}"; do
+  printf '  "%s"\n' "$port"
+done >>/usr/local/sbin/ufw-cf-allow.sh
+cat >>/usr/local/sbin/ufw-cf-allow.sh <<'BASH'
+)
 UFW="${UFW:-/usr/sbin/ufw}"
 IPV6_ENABLED="no"
 [[ -f /etc/default/ufw ]] && IPV6_ENABLED=$(awk -F= '/^IPV6=/{print tolower($2)}' /etc/default/ufw || echo "no")

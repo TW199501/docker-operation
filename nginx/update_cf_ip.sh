@@ -1,4 +1,3 @@
-# /usr/local/sbin/update-cf-ipsets.sh
 #!/usr/bin/env bash
 set -euo pipefail
 v4=$(mktemp) ; v6=$(mktemp)

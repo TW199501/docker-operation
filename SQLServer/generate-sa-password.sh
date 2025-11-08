@@ -1,6 +1,6 @@
 #!/bin/sh
-# Generate a strong MSSQL_SA_PASSWORD that satisfies SQL Server complexity requirements.
-# Usage: ./generate-sa-password.sh [length]
+# 產生滿足 SQL Server 複雜性要求的強 MSSQL_SA_PASSWORD。
+# 用法:./generate-sa-password。sh [長度]
 
 set -eu
 

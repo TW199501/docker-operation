@@ -1,4 +1,3 @@
-# 存成：/root/setup_geoip_cf.sh 並執行：sudo bash /root/setup_geoip_cf.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -11,6 +10,7 @@ CITY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb
 ASN_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
 CF_LOCAL_TRUST=( "127.0.0.1" "192.168.25.112" )   # 同機 cloudflared/本機來源（需要時可增刪）
 CRON_SPEC="0 3 * * 3,6"                           # 每周三、六 03:00
+SYSTEMD_ON_CALENDAR="${SYSTEMD_ON_CALENDAR:-Wed,Sat 03:00}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "缺少指令：$1"; exit 1; }; }
 need curl
@@ -91,12 +91,50 @@ chmod +x /usr/local/sbin/update_geoip2.sh
 echo "== 先執行一次更新腳本 =="
 /usr/local/sbin/update_geoip2.sh || true
 
-echo "== 設定 crontab（$CRON_SPEC 每週兩次） =="
-# 先移除舊的 update_geoip2.sh 排程
-sed -i '\#update_geoip2.sh#d' /etc/crontab
-# 新增：每周三、六 03:00 執行
-echo "$CRON_SPEC root /usr/local/sbin/update_geoip2.sh >/var/log/update_geoip2.log 2>&1" >> /etc/crontab
-systemctl reload cron 2>/dev/null || service cron reload 2>/dev/null || true
+LOG_FILE="/var/log/update_geoip2.log"
+
+if command -v systemctl >/dev/null 2>&1; then
+  echo "== 設定 systemd timer（$SYSTEMD_ON_CALENDAR） =="
+  cat >/etc/systemd/system/update-geoip2.service <<'UNIT'
+[Unit]
+Description=Update GeoIP2 DB & Cloudflare real_ip lists
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/update_geoip2.sh
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  cat >/etc/systemd/system/update-geoip2.timer <<UNIT
+[Unit]
+Description=Run update_geoip2 on schedule
+
+[Timer]
+OnCalendar=$SYSTEMD_ON_CALENDAR
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now update-geoip2.timer
+  systemctl list-timers update-geoip2.timer || true
+elif [ -d /etc/cron.d ]; then
+  echo "== 設定 /etc/cron.d 排程（$CRON_SPEC） =="
+  echo "$CRON_SPEC root /usr/local/sbin/update_geoip2.sh >$LOG_FILE 2>&1" >/etc/cron.d/update_geoip2
+  chmod 644 /etc/cron.d/update_geoip2
+  systemctl reload cron 2>/dev/null || systemctl reload crond 2>/dev/null || \
+    service cron reload 2>/dev/null || service crond reload 2>/dev/null || true
+else
+  echo "== BusyBox/傳統 cron：寫入 /etc/crontabs/root =="
+  mkdir -p /etc/crontabs
+  sed -i '\#update_geoip2.sh#d' /etc/crontabs/root 2>/dev/null || true
+  echo "$CRON_SPEC /usr/local/sbin/update_geoip2.sh >$LOG_FILE 2>&1" >> /etc/crontabs/root
+  service cron restart 2>/dev/null || service crond restart 2>/dev/null || \
+    rc-service crond restart 2>/dev/null || true
+fi
 
 echo "== 最後檢查 NGINX 設定 =="
 nginx -t && echo "完成 ✅ 可在 /var/log/update_geoip2.log 查看之後的排程輸出。"

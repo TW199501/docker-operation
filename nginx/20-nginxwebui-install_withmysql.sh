@@ -39,8 +39,16 @@ if ! command -v java >/dev/null 2>&1; then
     sudo mkdir -p /etc/apt/keyrings
     curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public \
       | sudo tee /etc/apt/keyrings/adoptium.asc >/dev/null
-    . /etc/os-release
-    CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+    CODENAME=""
+    if [ -r /etc/os-release ]; then
+      # shellcheck disable=SC1091
+      # shellcheck source=/etc/os-release
+      . /etc/os-release
+      CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+    fi
+    if [ -z "$CODENAME" ]; then
+      CODENAME="$(lsb_release -cs 2>/dev/null || echo "focal")"
+    fi
     echo "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb ${CODENAME} main" \
       | sudo tee /etc/apt/sources.list.d/adoptium.list >/dev/null
     sudo apt-get update -y
@@ -85,7 +93,9 @@ FLUSH PRIVILEGES;
 SQL
 
 echo "[3c] UFW 僅放行 ${LAN_CIDR} -> 3306"
-[ -f /etc/default/ufw ] && sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw || true
+if [ -f /etc/default/ufw ]; then
+  sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw || true
+fi
 ufw allow proto tcp from "$LAN_CIDR" to any port 3306 comment 'mysql from LAN' || true
 ufw delete allow 3306/tcp 2>/dev/null || true
 if ufw status 2>/dev/null | grep -qi inactive; then ufw --force enable; fi
