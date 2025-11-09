@@ -1,0 +1,26 @@
+# ShellCheck 配置 - 忽略常見的shell腳本警告
+
+# 忽略未使用的變量警告（通常是腳本設置的環境變量）
+disable=SC2034
+
+# 忽略echo命令的轉義序列警告（通常用於顏色輸出）
+disable=SC2028
+
+# 忽略無用的echo警告（通常是變量賦值）
+disable=SC2116
+
+# 忽略變量引用警告（腳本通常使用非引用變量）
+disable=SC2086
+
+# 忽略算術表達式警告
+disable=SC2004
+
+# 忽略拼寫檢查警告
+disable=SC2153
+
+# 忽略其他常見的警告
+disable=SC1090,SC1091,SC2154,SC2164
+
+# 啟用檢查的規則
+enable=add-default-case,avoid-nullary-conditions,check-unassigned-uppercase
+external-sources=true

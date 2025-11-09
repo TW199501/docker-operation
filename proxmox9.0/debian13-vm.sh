@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-
-
 function header_info() {
   clear
   cat <<"EOF"
@@ -499,6 +497,11 @@ btrfs)
   DISK_IMPORT="-format raw"
   FORMAT=",efitype=4m"
   THIN=""
+  ;;
+*)
+  msg_error "不支持的儲存類型: $STORAGE_TYPE"
+  msg_error "僅支持: nfs, dir, btrfs"
+  exit 1
   ;;
 esac
 for i in {0,1}; do
