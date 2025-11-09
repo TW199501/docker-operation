@@ -592,5 +592,5 @@ if [ "$START_VM" == "yes" ]; then
   qm start $VMID
   msg_ok "Started Debian 13 VM"
 fi
-post_update_to_api "done" "none"
+## post_update_to_api "done" "none"
 msg_ok "Completed Successfully!"
