@@ -496,15 +496,19 @@ btrfs)
   FORMAT=",efitype=4m"
   THIN=""
   ;;
-zfs)
+zfs | zfspool)
   DISK_EXT=".img"
   DISK_REF="$VMID/"
   DISK_IMPORT="-format raw"
   FORMAT=",efitype=4m"
   THIN=""
-  # ZFS specific optimizations
-  msg_info "检测到 ZFS 存储类型，应用 ZFS 优化设置..."
-  # ZFS compression is recommended for VM images
+  # ZFS/ZFSPool specific optimizations
+  if [[ "$STORAGE_TYPE" == "zfspool" ]]; then
+    msg_info "检测到 ZFS Pool 存储类型，应用 ZFSPool 优化设置..."
+  else
+    msg_info "检测到 ZFS 存储类型，应用 ZFS 优化设置..."
+  fi
+  # ZFS/ZFSPool compression is recommended for VM images
   # Note: ZFS specific options will be handled by Proxmox automatically
   ;;
 lvm | lvm-thin)
@@ -516,7 +520,7 @@ lvm | lvm-thin)
   ;;
 *)
   msg_error "不支持的儲存類型: $STORAGE_TYPE"
-  msg_error "支持: nfs, dir, btrfs, zfs, lvm, lvm-thin"
+  msg_error "支持: nfs, dir, btrfs, zfs, zfspool, lvm, lvm-thin"
   exit 1
   ;;
 esac
