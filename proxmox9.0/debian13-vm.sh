@@ -496,20 +496,22 @@ btrfs)
   FORMAT=",efitype=4m"
   THIN=""
   ;;
-zfs | zfspool)
+zfs)
   DISK_EXT=".img"
   DISK_REF="$VMID/"
   DISK_IMPORT="-format raw"
   FORMAT=",efitype=4m"
   THIN=""
-  # ZFS/ZFSPool specific optimizations
-  if [[ "$STORAGE_TYPE" == "zfspool" ]]; then
-    msg_info "检测到 ZFS Pool 存储类型，应用 ZFSPool 优化设置..."
-  else
-    msg_info "检测到 ZFS 存储类型，应用 ZFS 优化设置..."
-  fi
-  # ZFS/ZFSPool compression is recommended for VM images
-  # Note: ZFS specific options will be handled by Proxmox automatically
+  msg_info "检测到 ZFS 存储类型，应用 ZFS 优化设置..."
+  ;;
+zfspool)
+  DISK_EXT=""
+  DISK_REF=""
+  DISK_IMPORT="-format raw"
+  FORMAT=",efitype=4m"
+  THIN=""
+  msg_info "检测到 ZFS Pool 存储类型，应用 ZFSPool 优化设置..."
+  # ZFSPool handles volume names differently
   ;;
 lvm | lvm-thin)
   DISK_EXT=".raw"
@@ -526,8 +528,14 @@ lvm | lvm-thin)
 esac
 for i in {0,1}; do
   disk="DISK$i"
-  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
-  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+  if [[ "$STORAGE_TYPE" == "zfspool" ]]; then
+    # ZFSPool uses different naming convention
+    eval DISK${i}=vm-${VMID}-disk-${i}
+    eval DISK${i}_REF=${STORAGE}:${!disk}
+  else
+    eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
+    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+  fi
 done
 
 if ! command -v virt-customize &>/dev/null; then
@@ -538,6 +546,11 @@ if ! command -v virt-customize &>/dev/null; then
   apt-get -qq install dhcpcd-base -y >/dev/null 2>&1 || true
   msg_ok "Installed libguestfs-tools successfully"
 fi
+
+# Fix network issues for virt-customize
+msg_info "Setting up network for virt-customize..."
+export http_proxy="${http_proxy:-}"
+export https_proxy="${https_proxy:-}"
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
@@ -552,10 +565,18 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
 else
   msg_info "Adding QEMU Guest Agent to Debian 13 Qcow2 Disk Image"
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null &&
+  # Try to install qemu-guest-agent with retry logic for network issues
+  if virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-  msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
+    msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
+  else
+    msg_error "Failed to install qemu-guest-agent due to network issues. Continuing without it..."
+    # Skip qemu-guest-agent installation but continue with other customizations
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null 2>&1 &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null 2>&1
+    msg_ok "VM image customized (without qemu-guest-agent)"
+  fi
 fi
 
 # msg_info "Expanding root partition to use full disk space"
