@@ -1,0 +1,67 @@
+version: '3.8'
+x-resource-config: &resource-config
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: '0.5'
+      reservations:
+        memory: 256M
+        cpus: '0.25'
+
+services:
+  redis:
+    image: ccr.ccs.tencentyun.com/buildingai/redis:8.2.2
+    container_name: buildingai-redis${DOCKER_CONTAINER_SUFFIX:-}
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Taipei
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      QUICK_START_MODE: ${QUICK_START_MODE:-false}
+    ports:
+      - "${REDIS_EXTERNAL_PORT:-0.0.0.0}:${REDIS_EXTERNAL_PORT:+}6379"
+    volumes:
+      - ./redis/data:/data
+    networks:
+      - buildingai-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    <<: *resource-config
+
+  postgres:
+    image: ccr.ccs.tencentyun.com/buildingai/postgres:17.6
+    container_name: buildingai-postgres${DOCKER_CONTAINER_SUFFIX:-}
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Taipei
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_DATABASE:-buildingai}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT:-0.0.0.0}:${POSTGRES_EXTERNAL_PORT:+}5432"
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - buildingai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-buildingai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    <<: *resource-config
+
+networks:
+  buildingai-network:
+    driver: bridge
+    name: buildingai-network
+
+volumes:
+  redis-data:
+  postgres-data:

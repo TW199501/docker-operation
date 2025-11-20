@@ -8,5 +8,12 @@
 # .continue/
 .codebuddy
 
+# 日志目录
+logs/
+*.log
+
+# 日志文件
+logs/*.log
+
 
 

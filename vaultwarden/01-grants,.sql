@@ -1,0 +1,6 @@
+DROP USER IF EXISTS 'vaultwarden'@'%';
+CREATE USER IF NOT EXISTS 'vaultwarden'@'192.168.25.%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON `vaultwarden_db`.* TO 'vaultwarden'@'192.168.25.%';
+CREATE USER IF NOT EXISTS 'vaultwarden'@'172.%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON `vaultwarden_db`.* TO 'vaultwarden'@'172.%';
+FLUSH PRIVILEGES;

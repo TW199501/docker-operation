@@ -18,6 +18,12 @@ disable=SC2004
 # 忽略拼寫檢查警告
 disable=SC2153
 
+# 忽略 .env 文件的 shebang 警告
+disable=SC2148
+
+# 忽略回車符警告（Windows 環境）
+disable=SC1017
+
 # 忽略其他常見的警告
 disable=SC1090,SC1091,SC2154,SC2164
 
