@@ -1,0 +1,23 @@
+services:
+  app:
+    image: svhd/logto:latest
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+    environment:
+      - TRUST_PROXY_HEADER=${TRUST_PROXY_HEADER}
+      - DB_URL=${DB_URL}
+      - ENDPOINT=${ENDPOINT}
+      - ADMIN_ENDPOINT=${ADMIN_ENDPOINT}
+  #postgres:生產環境postgres
+  #  image: postgres:17-alpine
+  #  user: postgres
+  #  environment:
+  #    POSTGRES_USER: postgres
+  #    POSTGRES_PASSWORD: p0stgr3s
+  #  healthcheck:
+  #    test: ["CMD-SHELL", "pg_isready"]
+  #    interval: 5s
+  #    timeout: 5s
+  #    retries: 5

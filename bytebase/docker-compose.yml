@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  # 給 Bytebase 自己用的 PostgreSQL（系統資料庫）
+  bytebase_pg:
+    image: postgres:16
+    container_name: bytebase_pg
+    restart: always
+    environment:
+      POSTGRES_USER: bytebase
+      POSTGRES_PASSWORD: ChangeMe123!
+      POSTGRES_DB: bytebase
+    # 這個 port 對主機開不開都可以，看你要不要從外面連進來維護
+    ports:
+      - "5432:5432"
+    volumes:
+      - /opt/bytebase/pg_data:/var/lib/postgresql/data
+    networks:
+      - bytebase_net
+
+  # Bytebase 本體
+  bytebase:
+    image: bytebase/bytebase:latest
+    container_name: bytebase
+    restart: always
+    depends_on:
+      - bytebase_pg
+    environment:
+      # Bytebase 使用外部 PostgreSQL 的連線字串（用服務名稱 bytebase_pg）
+      PG_URL: "postgresql://bytebase:ChangeMe123!@bytebase_pg:5432/bytebase"
+    ports:
+      - "8080:8080"      # 對外就用 192.168.25.200:8080
+    volumes:
+      - ./data:/var/opt/bytebase
+    command:
+      [
+        "--data",
+        "/var/opt/bytebase",
+        "--port",
+        "8080",
+        "--external-url",
+        "http://192.168.25.200:8080"
+      ]
+    networks:
+      - bytebase_net
+
+networks:
+  bytebase_net:
+    driver: bridge
