@@ -1,0 +1,18 @@
+services:
+  pg-backup:
+    image: alpine:3
+    container_name: pg-backup
+    restart: always
+    environment:
+      PGHOST: postgres        # 你的 PG 容器名稱
+      PGPORT: "5432"          # 容器內的 PG port
+      PGUSER: postgres        # 用 postgres 或備份專用 superuser
+      PGPASSWORD: your_pg_password_here
+    volumes:
+      - /opt/pg-backup/pg-backup.sh:/usr/local/bin/pg-backup.sh:ro
+      - /opt/pg-backup/data:/backup
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "apk add --no-cache postgresql-client >/dev/null 2>&1 && \
+       echo '0 3,9,15,21 * * * /usr/local/bin/pg-backup.sh >> /var/log/pg-backup.log 2>&1' > /etc/crontabs/root && \
+       crond -f -l 2"
