@@ -253,7 +253,7 @@ if [ ! -f /etc/nginx/sites-available/default.conf ]; then
   $SUDO tee /etc/nginx/sites-available/default.conf >/dev/null <<'NG'
 server {
     listen 80 default_server;
-    listen [::]:80 default_server;
+    #listen [::]:80 default_server;
     server_name _;
 
     root /var/www/html;
@@ -628,4 +628,4 @@ echo "✅ 完成。下一次自動更新：每週三、六 03:00。"
 echo "   若要切換成『80/443 只允許 Cloudflare』："
 echo "     1) 刪世界開放： $SUDO ufw delete allow 80/tcp ; $SUDO ufw delete allow 443/tcp"
 echo "     2) 開啟同步：   $SUDO bash -c 'echo export UFW_SYNC=1 >> /etc/environment'"
-echo "     3) 立即同步：   UFW_SYNC=1 /usr/local/sbin/update_geoip2.sh && $SUDO ufw status numbered"
+echo "     3) 立即同步：   UFW_SYNC=1 /usr/local/sbin/update_geoip2.sh && sudo ufw status numbered"
