@@ -14,19 +14,19 @@ BUILD_DIR="${BUILD_DIR:-/home/nginx_build_geoip2}"
 MODSEC_WORK="${BUILD_DIR}/modsec_build"
 NGX_MODULES_DIR="/usr/lib/nginx/modules"
 MODSEC_DIR="/etc/nginx/modsecurity"
-MODSEC_DIR="/etc/nginx/modules"
 CONF_D_DIR="/etc/nginx/conf.d"
 
 # ---------- 需 root ----------
 if [ "$(id -u)" -ne 0 ]; then
-  echo "請用 root 執行：sudo bash 15-modsecurity-nginx.sh"; exit 1
+  echo "請用 root 執行: sudo bash 15-modsecurity-nginx.sh"
+  exit 1
 fi
 
 echo "==> 準備建置目錄：$MODSEC_WORK"
 rm -rf "$MODSEC_WORK"
 mkdir -p "$MODSEC_WORK"
 
-# ---------- 1) 安裝 libmodsecurity v3 + CRS（優先用套件） ----------
+# 1) 安裝 libmodsecurity v3 + CRS（優先用套件)
 echo "==> 安裝 libModSecurity v3（優先使用發行版套件）"
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
@@ -79,7 +79,7 @@ NGX_ARGS="$(nginx -V 2>&1 | sed -n 's/^.*configure arguments: //p')"
 NGX_ARGS_CLEAN="$(echo "$NGX_ARGS" \
   | sed -E 's/--with-openssl=[^ ]+//g; s/--with-pcre=[^ ]+//g; s/--with-zlib=[^ ]+//g; s/[[:space:]]+/ /g')"
 
-# ---------- 4) 只為動態模組重新 configure + make modules ----------
+# 4) 只為動態模組重新 configure + make modules
 echo "==> 以目前參數重新 configure（僅建置 modules），加入 ModSecurity 連接器"
 cd "$NGX_SRC"
 make clean || true
@@ -98,17 +98,17 @@ else
   exit 1
 fi
 
-# ---------- 5) modules.d 載入 ----------
-echo "==> 寫入 /etc/nginx/modules.d/00-load-modules.conf"
-mkdir -p /etc/nginx/modules.d
-MODS_FILE="/etc/nginx/modules.d/00-load-modules.conf"
-grep -q 'ngx_http_modsecurity_module.so' "$MODS_FILE" 2>/dev/null || \
+# 5) modules 載入（與 10-build-nginx.sh 保持一致：/etc/nginx/modules/*.conf）
+echo "==> 更新 /etc/nginx/modules/00-load-modules.conf"
+mkdir -p /etc/nginx/modules
+MODS_FILE="/etc/nginx/modules/00-load-modules.conf"
+if ! grep -q 'ngx_http_modsecurity_module.so' "$MODS_FILE" 2>/dev/null; then
   echo "load_module ${NGX_MODULES_DIR}/ngx_http_modsecurity_module.so;" >> "$MODS_FILE"
 fi
 
-# 確保 /etc/nginx/nginx.conf 會載入 modules.d（10-build 已處理，這裡再保險一次）
-if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
-  sed -i '1i include /etc/nginx/modules.d/*.conf;' /etc/nginx/nginx.conf
+# 確保 /etc/nginx/nginx.conf 會載入 /etc/nginx/modules/*.conf（10-build 已處理，這裡再保險一次）
+if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules/\*\.conf;?' /etc/nginx/nginx.conf; then
+  sed -i '1i include /etc/nginx/modules/*.conf;' /etc/nginx/nginx.conf
 fi
 
 # ---------- 6) 佈署 ModSecurity + CRS 設定 ----------
@@ -158,7 +158,7 @@ if [ -n "$FOUND_TEMPLATE" ]; then
   cp -f "$FOUND_TEMPLATE" "$CORE_CONF"
   sed -i 's/^\s*SecRuleEngine\s\+.*/SecRuleEngine On/' "$CORE_CONF"
 else
-  echo "   - 找不到樣板 寫入最小可用設定 fallback"
+  echo "   - 找不到樣板，寫入最小可用設定（fallback）"
   cat > "$CORE_CONF" <<'CONF'
 SecRuleEngine On
 SecRequestBodyAccess On
@@ -186,7 +186,7 @@ for d in /usr/share/modsecurity-crs /etc/modsecurity/crs /usr/local/share/modsec
 done
 
 if [ -n "$CRS_DIR" ]; then
-  echo "   - 偵測到 CRS：$CRS_DIR"
+  echo "   - 偵測到 CRS: $CRS_DIR"
   ln -sfn "$CRS_DIR" "$MODSEC_DIR/crs"
   if [ -f "$MODSEC_DIR/crs/crs-setup.conf.example" ] && [ ! -f "$MODSEC_DIR/crs/crs-setup.conf" ]; then
     cp "$MODSEC_DIR/crs/crs-setup.conf.example" "$MODSEC_DIR/crs/crs-setup.conf"
@@ -231,7 +231,7 @@ echo "   - 主設定：$MAIN_CONF"
 echo "   - 啟用片段：$CONF_D_DIR/modsecurity-enable.conf"
 
 # ---------- 7) 不執行 nginx -t，只嘗試 reload ----------
-echo "==> 嘗試重載 Nginx不執行 nginx -t"
+echo "==> 嘗試重載 Nginx（不執行 nginx -t）"
 if [ -n "${MPID:-}" ] && [ -f "$ACTIVE_CFG" ]; then
   if nginx -s reload; then
     echo "[OK] 已透過目前 master 進程重載 nginx"
@@ -252,12 +252,12 @@ else
 fi
 
 echo
-echo "✅ 完成：ModSecurity v3 + CRS 已啟用。"
+echo "✅ 完成 ModSecurity v3 + CRS 啟用。"
 echo "   - 模組：${NGX_MODULES_DIR}/ngx_http_modsecurity_module.so（已自動載入）"
 echo "   - 核心設定：${CORE_CONF}"
 echo "   - CRS：${CRS_DIR:-未安裝（已跳過 Include）}"
 echo "   - 包含檔：${MAIN_CONF}"
 echo "   - Nginx 啟用片段：${CONF_D_DIR}/modsecurity-enable.conf"
 echo
-echo "📌 若你日後用 nginxWebUI 的獨立 nginx.conf（例如 -c /home/nginxWebUI/nginx.conf），"
+echo "📌 若你日後用 nginxWebUI 的獨立 nginx.conf（例如 -c /home/nginxWebUI/nginx.conf）"
 echo "   請確認該 http{} 內有：  include /etc/nginx/conf.d/*.conf;  以讀取上面的啟用片段。"
