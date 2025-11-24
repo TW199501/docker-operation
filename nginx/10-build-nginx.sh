@@ -7,6 +7,19 @@
 # ===============================================
 set -euo pipefail
 
+# 设置命令前缀（自动检测是否需要 sudo）
+if [ "$(id -u)" -eq 0 ]; then
+  # 已经是 root，不需要 sudo
+  SUDO=""
+else
+  # 普通用户，需要 sudo
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "錯誤：需要 sudo 權限但找不到 sudo 命令"
+    exit 1
+  fi
+  SUDO="sudo"
+fi
+
 # ===== 可調參數（可用環境變數覆寫） =====
 BUILD_DIR="${BUILD_DIR:-/home/nginx_build_geoip2}"
 NGINX_VERSION="${NGINX_VERSION:-1.29.3}" # Nginx 版本
