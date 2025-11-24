@@ -13,20 +13,21 @@ set -euo pipefail
 BUILD_DIR="${BUILD_DIR:-/home/nginx_build_geoip2}"
 MODSEC_WORK="${BUILD_DIR}/modsec_build"
 NGX_MODULES_DIR="/usr/lib/nginx/modules"
-MODSEC_DIR="/etc/nginx/modsec"
+MODSEC_DIR="/etc/nginx/modsecurity"
 CONF_D_DIR="/etc/nginx/conf.d"
 
 # ---------- 需 root ----------
 if [ "$(id -u)" -ne 0 ]; then
-  echo "請用 root 執行：sudo bash 15-modsecurity-nginx.sh"; exit 1
+  echo "請用 root 執行: sudo bash 15-modsecurity-nginx.sh"
+  exit 1
 fi
 
 echo "==> 準備建置目錄：$MODSEC_WORK"
 rm -rf "$MODSEC_WORK"
 mkdir -p "$MODSEC_WORK"
 
-# ---------- 1) 安裝 libmodsecurity v3 + CRS（優先用套件） ----------
-echo "==> 安裝 libModSecurity v3（優先使用發行版套件）"
+# 1) 安裝 libmodsecurity v3 + CRS（優先用套件)
+echo "==> 安裝 libModSecurity v3 優先使用發行版套件"
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -yq
@@ -46,16 +47,16 @@ fi
 
 # 確認 libmodsecurity 存在
 if ! ldconfig -p 2>/dev/null | grep -qi 'libmodsecurity\.so'; then
-  echo "!! 找不到 libmodsecurity（libmodsecurity.so）。請確認 libmodsecurity 已安裝（含 -dev）。"
+  echo "!! 找不到 libmodsecurity(libmodsecurity.so)。請確認 libmodsecurity 已安裝（含 -dev）。"
   exit 1
 fi
 
-# ---------- 2) 取得 ModSecurity-nginx 連接器 ----------
+# 2) 取得 ModSecurity-nginx 連接器
 echo "==> 取得 ModSecurity-nginx 連接器"
 git clone --depth=1 https://github.com/owasp-modsecurity/ModSecurity-nginx.git \
   "${MODSEC_WORK}/ModSecurity-nginx"
 
-# ---------- 3) 準備對應版本的 Nginx 原始碼 ----------
+# 3) 準備對應版本的 Nginx 原始碼
 echo "==> 準備對應版本 Nginx 原始碼（用於編譯動態模組）"
 NGINX_VER="$(nginx -v 2>&1 | sed -n 's/^nginx version: nginx\///p')"
 [ -z "$NGINX_VER" ] && { echo "!! 無法取得 nginx 版本"; exit 1; }
@@ -64,9 +65,11 @@ NGX_SRC="${BUILD_DIR}/nginx-${NGINX_VER}"
 if [ ! -d "$NGX_SRC" ]; then
   echo "   下載 nginx-${NGINX_VER} 原始碼..."
   mkdir -p "$BUILD_DIR"
-  ( cd "$BUILD_DIR" && \
+  (
+    cd "$BUILD_DIR" && \
     curl -fSLo "nginx-${NGINX_VER}.tar.gz" "http://nginx.org/download/nginx-${NGINX_VER}.tar.gz" && \
-    tar -xzf "nginx-${NGINX_VER}.tar.gz" )
+    tar -xzf "nginx-${NGINX_VER}.tar.gz"
+  )
 fi
 
 # 抓已安裝 nginx 的 configure 參數，去掉可能已失效的來源路徑參數
@@ -76,8 +79,8 @@ NGX_ARGS="$(nginx -V 2>&1 | sed -n 's/^.*configure arguments: //p')"
 NGX_ARGS_CLEAN="$(echo "$NGX_ARGS" \
   | sed -E 's/--with-openssl=[^ ]+//g; s/--with-pcre=[^ ]+//g; s/--with-zlib=[^ ]+//g; s/[[:space:]]+/ /g')"
 
-# ---------- 4) 只為動態模組重新 configure + make modules ----------
-echo "==> 以目前參數重新 configure（僅建置 modules），加入 ModSecurity 連接器"
+# 4) 只為動態模組重新 configure + make modules
+echo "==> 以目前參數重新 configure 僅建置 modules 加入 ModSecurity 連接器"
 cd "$NGX_SRC"
 make clean || true
 CONFIG_CMD="./configure $NGX_ARGS_CLEAN --add-dynamic-module=\"${MODSEC_WORK}/ModSecurity-nginx\""
@@ -95,19 +98,20 @@ else
   exit 1
 fi
 
-# ---------- 5) modules.d 載入 ----------
-echo "==> 寫入 /etc/nginx/modules.d/00-load-modules.conf"
-mkdir -p /etc/nginx/modules.d
-MODS_FILE="/etc/nginx/modules.d/00-load-modules.conf"
-grep -q 'ngx_http_modsecurity_module.so' "$MODS_FILE" 2>/dev/null || \
+# 5) modules 載入（與 10-build-nginx.sh 保持一致：/etc/nginx/modules/*.conf）
+echo "==> 更新 /etc/nginx/modules/00-load-modules.conf"
+mkdir -p /etc/nginx/modules
+MODS_FILE="/etc/nginx/modules/00-load-modules.conf"
+if ! grep -q 'ngx_http_modsecurity_module.so' "$MODS_FILE" 2>/dev/null; then
   echo "load_module ${NGX_MODULES_DIR}/ngx_http_modsecurity_module.so;" >> "$MODS_FILE"
-
-# 確保 /etc/nginx/nginx.conf 會載入 modules.d（10-build 已處理，這裡再保險一次）
-if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
-  sed -i '1i include /etc/nginx/modules.d/*.conf;' /etc/nginx/nginx.conf
 fi
 
-# ---------- 6) 佈署 ModSecurity + CRS ----------
+# 確保 /etc/nginx/nginx.conf 會載入 /etc/nginx/modules/*.conf（10-build 已處理，這裡再保險一次）
+if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules/\*\.conf;?' /etc/nginx/nginx.conf; then
+  sed -i '1i include /etc/nginx/modules/*.conf;' /etc/nginx/nginx.conf
+fi
+
+# ---------- 6) 佈署 ModSecurity + CRS 設定 ----------
 echo "==> 佈署 ModSecurity 與 CRS 設定"
 install -d -m 0755 "$MODSEC_DIR"
 
@@ -130,7 +134,7 @@ if [ -n "${MPID:-}" ] && [ -r "/proc/$MPID/cmdline" ]; then
   fi
 fi
 
-# 依 ACTIVE_CFG 抓執行 user（缺省 www-data）
+# 依 ACTIVE_CFG 抓執行 user（預設 www-data）
 RUN_USER="$(awk '/^\s*user\s+/{print $2}' "$ACTIVE_CFG" 2>/dev/null | tr -d ' ;' | head -n1 || true)"
 [ -z "$RUN_USER" ] && RUN_USER="www-data"
 chown "$RUN_USER:$RUN_USER" "$AUDIT_LOG" 2>/dev/null || true
@@ -154,7 +158,7 @@ if [ -n "$FOUND_TEMPLATE" ]; then
   cp -f "$FOUND_TEMPLATE" "$CORE_CONF"
   sed -i 's/^\s*SecRuleEngine\s\+.*/SecRuleEngine On/' "$CORE_CONF"
 else
-  echo "   - 找不到樣板，寫入最小可用設定（fallback）"
+  echo "   - 找不到樣板 寫入最小可用設定 fallback"
   cat > "$CORE_CONF" <<'CONF'
 SecRuleEngine On
 SecRequestBodyAccess On
@@ -175,14 +179,14 @@ SecPcreMatchLimitRecursion 100000
 CONF
 fi
 
-# 偵測/鏈結 CRS，並保證 crs-setup.conf 與 rules 存在（避免「Not able to open file」）
+# 偵測/連結 CRS，並保證 crs-setup.conf 與 rules 存在（避免「Not able to open file」）
 CRS_DIR=""
 for d in /usr/share/modsecurity-crs /etc/modsecurity/crs /usr/local/share/modsecurity-crs; do
   if [ -d "$d" ]; then CRS_DIR="$d"; break; fi
 done
 
 if [ -n "$CRS_DIR" ]; then
-  echo "   - 偵測到 CRS：$CRS_DIR"
+  echo "   - 偵測到 CRS: $CRS_DIR"
   ln -sfn "$CRS_DIR" "$MODSEC_DIR/crs"
   if [ -f "$MODSEC_DIR/crs/crs-setup.conf.example" ] && [ ! -f "$MODSEC_DIR/crs/crs-setup.conf" ]; then
     cp "$MODSEC_DIR/crs/crs-setup.conf.example" "$MODSEC_DIR/crs/crs-setup.conf"
@@ -191,10 +195,10 @@ if [ -n "$CRS_DIR" ]; then
   [ -f "$MODSEC_DIR/crs/crs-setup.conf" ] || echo "# minimal CRS setup" > "$MODSEC_DIR/crs/crs-setup.conf"
   # 檢查 rules 目錄
   if [ ! -d "$MODSEC_DIR/crs/rules" ]; then
-    echo "⚠️  未發現 $MODSEC_DIR/crs/rules，請確認 modsecurity-crs 是否完整安裝"
+    echo "⚠️  未發現 $MODSEC_DIR/crs/rules 請確認 modsecurity-crs 是否完整安裝"
   fi
 else
-  echo "   - 未找到 CRS（之後可安裝 modsecurity-crs 套件再重載）"
+  echo "   - 未找到 CRS 之後可安裝 modsecurity-crs 套件再重載"
 fi
 
 # 主引入檔（供 modsecurity_rules_file 指向）
@@ -218,37 +222,42 @@ EXC
 # 在 /etc/nginx/conf.d 啟用（你的 /etc/nginx/nginx.conf / 或 WebUI 的 http{} 需有 include conf.d/*.conf）
 install -d -m 0755 "$CONF_D_DIR"
 cat > "$CONF_D_DIR/modsecurity-enable.conf" <<'NG'
-# 啟用 ModSecurity（http 區塊）
+# 啟用 ModSecurity (http 區塊）
 modsecurity on;
-modsecurity_rules_file /etc/nginx/modsec/main.conf;
+modsecurity_rules_file /etc/nginx/modsecurity/main.conf;
 NG
 
 echo "   - 主設定：$MAIN_CONF"
 echo "   - 啟用片段：$CONF_D_DIR/modsecurity-enable.conf"
 
-# ---------- 7) 驗證並依目前 master 的 -c 重載 ----------
-echo "==> 驗證並重載 Nginx"
-if [ -n "${MPID:-}" ] && [ -n "${ACTIVE_CFG:-}" ] && [ -f "$ACTIVE_CFG" ]; then
-  nginx -t -c "$ACTIVE_CFG"
-  nginx -s reload
-  echo "[OK] 已用 -c $ACTIVE_CFG 驗證並重載"
-else
-  nginx -t
-  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
-    systemctl reload nginx
+# ---------- 7) 不執行 nginx -t，只嘗試 reload ----------
+echo "==> 嘗試重載 Nginx不執行 nginx -t"
+if [ -n "${MPID:-}" ] && [ -f "$ACTIVE_CFG" ]; then
+  if nginx -s reload; then
+    echo "[OK] 已透過目前 master 進程重載 nginx"
   else
-    nginx -s reload || nginx || true
+    echo "[WARN] 透過 master 進程重載失敗，請手動檢查 nginx"
   fi
-  echo "[OK] 已使用預設配置驗證並重載"
+else
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+    if systemctl reload nginx; then
+      echo "[OK] 已透過 systemctl reload nginx"
+    else
+      echo "[WARN] systemctl reload nginx 失敗，改用 nginx -s reload"
+      nginx -s reload || echo "[WARN] nginx -s reload 失敗，請手動檢查 nginx"
+    fi
+  else
+    nginx -s reload || nginx || echo "[WARN] nginx reload/start 失敗，請手動檢查 nginx 配置"
+  fi
 fi
 
 echo
-echo "✅ 完成：ModSecurity v3 + CRS 已啟用。"
-echo "   - 模組：${NGX_MODULES_DIR}/ngx_http_modsecurity_module.so（已自動載入）"
+echo "✅ 完成 ModSecurity v3 + CRS 啟用。"
+echo "   - 模組：${NGX_MODULES_DIR}/ngx_http_modsecurity_module.so(已自動載入）"
 echo "   - 核心設定：${CORE_CONF}"
-echo "   - CRS：${CRS_DIR:-未安裝（已跳過 Include）}"
+echo "   - CRS:${CRS_DIR:-未安裝，已跳過 Include}"
 echo "   - 包含檔：${MAIN_CONF}"
 echo "   - Nginx 啟用片段：${CONF_D_DIR}/modsecurity-enable.conf"
 echo
-echo "📌 若你日後用 nginxWebUI 的獨立 nginx.conf（例如 -c /home/nginxWebUI/nginx.conf），"
+echo "   若你日後用 nginxWebUI 的獨立 nginx.conf(例如 -c /home/nginxWebUI/nginx.conf）"
 echo "   請確認該 http{} 內有：  include /etc/nginx/conf.d/*.conf;  以讀取上面的啟用片段。"
