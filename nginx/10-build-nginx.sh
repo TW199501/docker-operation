@@ -319,7 +319,7 @@ write_base_nginx_conf() {
   if [ -f "$NGINX_ETC/nginx.conf" ]; then
     $SUDO cp -a "$NGINX_ETC/nginx.conf" "$NGINX_ETC/nginx.conf.bak.$NOW" || true
   fi
-  $SUDO tee "$NGINX_ETC/nginx.conf" >/dev/null <<NG
+  $SUDO tee "$NGINX_ETC/nginx.conf" >/dev/null <<'NG'
 include /etc/nginx/modules/*.conf;
 
 user nginx;
