@@ -50,6 +50,7 @@ echo ">> 建立建置目錄：$BUILD_DIR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
+NGINX_ETC="${NGINX_ETC:-/etc/nginx}"   # Nginx 設定目錄
 
 # ===== 抓 Nginx 原始碼 =====
 echo ">> 下載 Nginx ${NGINX_VERSION}"
@@ -79,8 +80,8 @@ if [ "$need_install" -eq 1 ]; then
     export DEBIAN_FRONTEND=noninteractive
     $SUDO apt-get update -yq
     $SUDO apt-get install -yq \
-      build-essential zlib1g-dev libssl-dev libmaxminddb-dev \
-      unzip git libpcre2-dev libxml2-dev libxslt1-dev \
+      build-essential zlib1g-dev libssl-dev libmaxminddb0 libmaxminddb-dev \
+      unzip git libpcre2-dev libxml2-dev libxslt1-dev libmodsecurity3 libmodsecurity-dev\
       curl wget cmake libbrotli-dev
   elif command -v dnf >/dev/null 2>&1; then
     $SUDO dnf -y groupinstall "Development Tools"
@@ -194,9 +195,20 @@ sudo mkdir -p /usr/lib/nginx/modules
 sudo cp objs/*.so /usr/lib/nginx/modules/
 
 # ===== 模組載入（首次安裝：全載 + 存在檢查）=====
-echo ">> 初始化 /etc/nginx/modules.d（首次安裝）"
-sudo rm -f /etc/nginx/modules.d/*.conf
-sudo mkdir -p /etc/nginx/modules.d
+echo ">> 初始化 Nginx 目錄與模組（首次安裝）"
+
+# 基本目錄（http / stream / geoip / ssl / modules）
+sudo mkdir -p \
+  "$NGINX_ETC/conf.d" \
+  "$NGINX_ETC/sites-available" \
+  "$NGINX_ETC/sites-enabled" \
+  "$NGINX_ETC/streams-available" \
+  "$NGINX_ETC/streams-enabled" \
+  "$NGINX_ETC/geoip" \
+  "$NGINX_ETC/modules" \
+  "$NGINX_ETC/ssl"
+
+sudo chmod 700 "$NGINX_ETC/ssl"
 
 # 想載哪些 .so 就列在這裡；不存在就自動跳過
 MODULES=(
@@ -211,19 +223,22 @@ MODULES=(
   ngx_mail_module.so
 )
 
+# 重新生成模組設定
+sudo rm -f "$NGINX_ETC/modules/00-load-modules.conf"
 {
   for so in "${MODULES[@]}"; do
     if [ -f "/usr/lib/nginx/modules/$so" ]; then
       echo "load_module /usr/lib/nginx/modules/$so;"
     fi
   done
-} | sudo tee /etc/nginx/modules.d/00-load-modules.conf >/dev/null
+} | sudo tee "$NGINX_ETC/modules/00-load-modules.conf" >/dev/null
 
 # 確保主設定會載入 modules.d/*.conf（放在檔案最上面最穩）
-if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
-  echo ">> 在 /etc/nginx/nginx.conf 最上方加入 include modules.d"
-  sudo sed -i '1i include /etc/nginx/modules.d/*.conf;' /etc/nginx/nginx.conf
+if ! grep -qE '^[[:space:]]*include[[:space:]]+'"$NGINX_ETC"'/modules/\*\.conf;?' "$NGINX_ETC/nginx.conf"; then
+  echo ">> 在 $NGINX_ETC/nginx.conf 最上方加入 include modules"
+  sudo sed -i "1i include $NGINX_ETC/modules/*.conf;" "$NGINX_ETC/nginx.conf"
 fi
+
 if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/sites-enabled/\*;?' /etc/nginx/nginx.conf; then
   echo ">> 在 nginx.conf http{} 內加入 sites-enabled include"
   if sudo grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/conf\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
@@ -301,32 +316,80 @@ NG
 # 確保 conf.d 有被載入（若現有配置壞掉，回寫安全基底）
 write_base_nginx_conf() {
   local NOW; NOW="$(date +%F_%H%M%S)"
-  if [ -f /etc/nginx/nginx.conf ]; then
-    sudo cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.$NOW" || true
+  if [ -f "$NGINX_ETC/nginx.conf" ]; then
+    sudo cp -a "$NGINX_ETC/nginx.conf" "$NGINX_ETC/nginx.conf.bak.$NOW" || true
   fi
-  sudo tee /etc/nginx/nginx.conf >/dev/null <<'NG'
-include /etc/nginx/modules.d/*.conf;
+  sudo tee "$NGINX_ETC/nginx.conf" >/dev/null <<NG
+include /etc/nginx/modules/*.conf;
 
+user nginx;
 worker_processes auto;
+error_log /var/log/nginx/error.log notice;
 pid /run/nginx.pid;
-
 events {
     worker_connections 1024;
 }
-
 http {
-    include       mime.types;
-    default_type  application/octet-stream;
-
-    # 請把所有 server{} 與 http 層設定放到這裡
+    include /etc/nginx/mime.types;
     include /etc/nginx/conf.d/*.conf;
     include /etc/nginx/sites-enabled/*;
+    #設定也挪到 00-realip.conf
+    #include /etc/nginx/geoip/cloudflared_realip.conf;
+    #include /etc/nginx/geoip/cloudflare_v4_realip.conf;
+    #include /etc/nginx/geoip/cloudflare_v6_realip.conf;
+    #set_real_ip_from 127.0.0.1;
+    #real_ip_header X-Forwarded-For;
+    #real_ip_recursive on;
+    default_type application/octet-stream;
 
-    access_log /var/log/nginx/access.log;
-    error_log  /var/log/nginx/error.log;
+    # GeoIP2（mmdb + 變數）
+    geoip2_proxy_recursive on;
+    geoip2 /etc/nginx/geoip/GeoLite2-City.mmdb {
+        auto_reload 5m;
+        $geoip2_data_country_name country names en;
+        $geoip2_data_city_name    city names en;
+    }
+
+    log_format cf '$remote_addr - $remote_user [$time_local] '
+        '"$request" $status $body_bytes_sent '
+        '"$http_referer" "$http_user_agent" '
+        'Country="$geoip2_data_country_name" '
+        'City="$geoip2_data_city_name"';
+    access_log /var/log/nginx/access.log cf;
 
     sendfile on;
+    #tcp_nopush     on;
     keepalive_timeout 65;
+
+    limit_req_zone $binary_remote_addr zone=req_limit_per_ip:10m rate=5r/s;
+
+    # brotli + gzip
+    brotli on;
+    brotli_static on;
+    brotli_comp_level 6;
+    brotli_types text/plain text/css application/json application/javascript application/xml;
+
+    gzip on;
+    gzip_min_length 1;
+    gzip_comp_level 5;
+
+    server_names_hash_bucket_size 32;
+    client_header_buffer_size 1k;
+    client_body_buffer_size 8k;
+    client_max_body_size 2g;
+    client_body_timeout 300s;
+    send_timeout 300s;
+
+    # header 整理
+    more_clear_headers "X-Powered-By";
+    more_clear_headers "Via";
+    more_set_headers 'Server: MySecureGateway';
+    server_tokens off;
+
+    proxy_cache_path /var/cache/nginx/proxy_cache levels=1:2 use_temp_path=on keys_zone=proxy_cache:10m inactive=60m max_size=1g min_free=100m manager_files=100 manager_sleep=50ms manager_threshold=200ms loader_files=199 loader_sleep=50ms loader_threshold=200ms;
+}
+stream {
+    include /etc/nginx/streams-enabled/*;
 }
 NG
 }
