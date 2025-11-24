@@ -189,16 +189,16 @@ make clean || true
 
 echo ">> make / make install"
 make -j2
-sudo make install
+$SUDO make install
 make modules -j2
-sudo mkdir -p /usr/lib/nginx/modules
-sudo cp objs/*.so /usr/lib/nginx/modules/
+$SUDO mkdir -p /usr/lib/nginx/modules
+$SUDO cp objs/*.so /usr/lib/nginx/modules/
 
 # ===== 模組載入（首次安裝：全載 + 存在檢查）=====
 echo ">> 初始化 Nginx 目錄與模組（首次安裝）"
 
 # 基本目錄（http / stream / geoip / ssl / modules）
-sudo mkdir -p \
+$SUDO mkdir -p \
   "$NGINX_ETC/conf.d" \
   "$NGINX_ETC/sites-available" \
   "$NGINX_ETC/sites-enabled" \
@@ -208,7 +208,7 @@ sudo mkdir -p \
   "$NGINX_ETC/modules" \
   "$NGINX_ETC/ssl"
 
-sudo chmod 700 "$NGINX_ETC/ssl"
+$SUDO chmod 700 "$NGINX_ETC/ssl"
 
 # 想載哪些 .so 就列在這裡；不存在就自動跳過
 MODULES=(
@@ -224,33 +224,33 @@ MODULES=(
 )
 
 # 重新生成模組設定
-sudo rm -f "$NGINX_ETC/modules/00-load-modules.conf"
+$SUDO rm -f "$NGINX_ETC/modules/00-load-modules.conf"
 {
   for so in "${MODULES[@]}"; do
     if [ -f "/usr/lib/nginx/modules/$so" ]; then
       echo "load_module /usr/lib/nginx/modules/$so;"
     fi
   done
-} | sudo tee "$NGINX_ETC/modules/00-load-modules.conf" >/dev/null
+} | $SUDO tee "$NGINX_ETC/modules/00-load-modules.conf" >/dev/null
 
 # 確保主設定會載入 modules.d/*.conf（放在檔案最上面最穩）
 if ! grep -qE '^[[:space:]]*include[[:space:]]+'"$NGINX_ETC"'/modules/\*\.conf;?' "$NGINX_ETC/nginx.conf"; then
   echo ">> 在 $NGINX_ETC/nginx.conf 最上方加入 include modules"
-  sudo sed -i "1i include $NGINX_ETC/modules/*.conf;" "$NGINX_ETC/nginx.conf"
+  $SUDO sed -i "1i include $NGINX_ETC/modules/*.conf;" "$NGINX_ETC/nginx.conf"
 fi
 
 if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/sites-enabled/\*;?' /etc/nginx/nginx.conf; then
   echo ">> 在 nginx.conf http{} 內加入 sites-enabled include"
-  if sudo grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/conf\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
-    sudo sed -i '/^[[:space:]]*include[[:space:]]\+\/etc\/nginx\/conf\.d\/\*\.conf;\?/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
+  if $SUDO grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/conf\.d/\*\.conf;?' /etc/nginx/nginx.conf; then
+    $SUDO sed -i '/^[[:space:]]*include[[:space:]]\+\/etc\/nginx\/conf\.d\/\*\.conf;\?/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
   else
-    sudo sed -i '/^[[:space:]]*http[[:space:]]*{/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
+    $SUDO sed -i '/^[[:space:]]*http[[:space:]]*{/a\    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
   fi
 fi
 
 if [ ! -f /etc/nginx/sites-available/default.conf ]; then
   echo ">> 建立 /etc/nginx/sites-available/default.conf 範例"
-  sudo tee /etc/nginx/sites-available/default.conf >/dev/null <<'NG'
+  $SUDO tee /etc/nginx/sites-available/default.conf >/dev/null <<'NG'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -268,36 +268,36 @@ fi
 
 if [ ! -e /etc/nginx/sites-enabled/default.conf ]; then
   echo ">> 建立 sites-enabled 預設符號連結"
-  sudo ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
+  $SUDO ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
 fi
 
 # 驗證
-sudo nginx -t
+$SUDO nginx -t
 
 
 # ===== GeoIP2 mmdb =====
 echo ">> 安裝 GeoIP2 mmdb"
-sudo mkdir -p /etc/nginx/geoip
-sudo wget -q -O /etc/nginx/geoip/GeoLite2-ASN.mmdb     "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
-sudo wget -q -O /etc/nginx/geoip/GeoLite2-City.mmdb    "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
-sudo wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
+$SUDO mkdir -p /etc/nginx/geoip
+$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-ASN.mmdb     "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
+$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-City.mmdb    "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
+$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
 
 # ===== real_ip 初始化 =====
 echo ">> 初始化 Cloudflare real_ip 與 conf.d"
-sudo mkdir -p /etc/nginx/conf.d
-sudo install -d -m 0755 /etc/nginx/sites-available /etc/nginx/sites-enabled
+$SUDO mkdir -p /etc/nginx/conf.d
+$SUDO install -d -m 0755 /etc/nginx/sites-available /etc/nginx/sites-enabled
 TMP_CF="$(mktemp -d)"; trap 'rm -rf "$TMP_CF"' EXIT
 curl -fsSL --retry 3 https://www.cloudflare.com/ips-v4 | awk '{print "set_real_ip_from " $1 ";"}' > "$TMP_CF/cloudflare_v4_realip.conf"
 curl -fsSL --retry 3 https://www.cloudflare.com/ips-v6 | awk '{print "set_real_ip_from " $1 ";"}' > "$TMP_CF/cloudflare_v6_realip.conf"
-sudo install -m0644 "$TMP_CF/cloudflare_v4_realip.conf" /etc/nginx/geoip/cloudflare_v4_realip.conf
-sudo install -m0644 "$TMP_CF/cloudflare_v6_realip.conf" /etc/nginx/geoip/cloudflare_v6_realip.conf
+$SUDO install -m0644 "$TMP_CF/cloudflare_v4_realip.conf" /etc/nginx/geoip/cloudflare_v4_realip.conf
+$SUDO install -m0644 "$TMP_CF/cloudflare_v6_realip.conf" /etc/nginx/geoip/cloudflare_v6_realip.conf
 MY_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {print $7; exit}')"
-sudo bash -c 'cat > /etc/nginx/geoip/cloudflared_realip.conf' <<EOF
+$SUDO bash -c 'cat > /etc/nginx/geoip/cloudflared_realip.conf' <<EOF
 set_real_ip_from 127.0.0.1;
 ${MY_IP:+set_real_ip_from $MY_IP;}
 # cloudflared 不在本機時：加上 set_real_ip_from <cloudflared_IP>;
 EOF
-sudo tee /etc/nginx/conf.d/00-realip.conf >/dev/null << 'NG'
+$SUDO tee /etc/nginx/conf.d/00-realip.conf >/dev/null << 'NG'
 # 信任來源（本機 / 隧道 / Cloudflare）
 include /etc/nginx/geoip/cloudflared_realip.conf;
 include /etc/nginx/geoip/cloudflare_v4_realip.conf;
@@ -317,9 +317,9 @@ NG
 write_base_nginx_conf() {
   local NOW; NOW="$(date +%F_%H%M%S)"
   if [ -f "$NGINX_ETC/nginx.conf" ]; then
-    sudo cp -a "$NGINX_ETC/nginx.conf" "$NGINX_ETC/nginx.conf.bak.$NOW" || true
+    $SUDO cp -a "$NGINX_ETC/nginx.conf" "$NGINX_ETC/nginx.conf.bak.$NOW" || true
   fi
-  sudo tee "$NGINX_ETC/nginx.conf" >/dev/null <<NG
+  $SUDO tee "$NGINX_ETC/nginx.conf" >/dev/null <<NG
 include /etc/nginx/modules/*.conf;
 
 user nginx;
@@ -395,14 +395,14 @@ NG
 }
 
 # 若語法檢查失敗（例如 include 寫壞），就覆寫成基礎模板
-if ! sudo nginx -t >/dev/null 2>&1; then
+if ! $SUDO nginx -t >/dev/null 2>&1; then
   echo ">> 檢測到 nginx 配置有誤，回寫標準 nginx.conf ..."
   write_base_nginx_conf
 fi
 
 # ===== 合併版更新腳本（GeoIP2 + CF real_ip + 可選 UFW）=====
 echo ">> 寫入 /usr/local/sbin/update_geoip2.sh（每週三、六 03:00 跑）"
-sudo tee /usr/local/sbin/update_geoip2.sh >/dev/null <<'UPD'
+$SUDO tee /usr/local/sbin/update_geoip2.sh >/dev/null <<'UPD'
 #!/usr/bin/env bash
 set -euo pipefail
 GEOIP_DIR="/etc/nginx/geoip"
@@ -472,19 +472,19 @@ else
   echo "[INFO] nginx 未在執行，僅完成清單/DB 更新；略過 reload"
 fi
 UPD
-sudo chmod +x /usr/local/sbin/update_geoip2.sh
+$SUDO chmod +x /usr/local/sbin/update_geoip2.sh
 
 # ===== 安排排程（systemd 優先，否則 cron.d，再否則 crontabs/root） =====
 if command -v systemctl >/dev/null 2>&1; then
   echo ">> 使用 systemd timer 安排排程"
-  sudo tee /etc/systemd/system/update-geoip2.service >/dev/null <<'UNIT'
+  $SUDO tee /etc/systemd/system/update-geoip2.service >/dev/null <<'UNIT'
 [Unit]
 Description=Update GeoIP2 DB & Cloudflare real_ip lists (nginx reload)
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/update_geoip2.sh
 UNIT
-  sudo tee /etc/systemd/system/update-geoip2.timer >/dev/null <<'UNIT'
+  $SUDO tee /etc/systemd/system/update-geoip2.timer >/dev/null <<'UNIT'
 [Unit]
 Description=Run update_geoip2 twice weekly at 03:00
 [Timer]
@@ -494,20 +494,20 @@ RandomizedDelaySec=5min
 [Install]
 WantedBy=timers.target
 UNIT
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now update-geoip2.timer
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable --now update-geoip2.timer
   systemctl list-timers | grep update-geoip2 || true
 elif [ -d /etc/cron.d ]; then
   echo ">> 使用 /etc/cron.d 安排排程"
-  echo '0 3 * * 3,6 root /usr/local/sbin/update_geoip2.sh >/var/log/update_geoip2.log 2>&1' | sudo tee /etc/cron.d/update_geoip2 >/dev/null
-  sudo chmod 644 /etc/cron.d/update_geoip2
-  sudo systemctl reload cron 2>/dev/null || sudo systemctl reload crond 2>/dev/null || sudo service cron reload 2>/dev/null || sudo service crond reload 2>/dev/null || true
+  echo '0 3 * * 3,6 root /usr/local/sbin/update_geoip2.sh >/var/log/update_geoip2.log 2>&1' | $SUDO tee /etc/cron.d/update_geoip2 >/dev/null
+  $SUDO chmod 644 /etc/cron.d/update_geoip2
+  $SUDO systemctl reload cron 2>/dev/null || $SUDO systemctl reload crond 2>/dev/null || $SUDO service cron reload 2>/dev/null || $SUDO service crond reload 2>/dev/null || true
 else
   echo ">> BusyBox/Alpine：寫入 /etc/crontabs/root"
-  sudo mkdir -p /etc/crontabs
-  sudo sed -i '\#update_geoip2.sh#d' /etc/crontabs/root 2>/dev/null || true
-  echo '0 3 * * 3,6 /usr/local/sbin/update_geoip2.sh >/var/log/update_geoip2.log 2>&1' | sudo tee -a /etc/crontabs/root >/dev/null
-  sudo service crond restart 2>/dev/null || sudo rc-service crond restart 2>/dev/null || true
+  $SUDO mkdir -p /etc/crontabs
+  $SUDO sed -i '\#update_geoip2.sh#d' /etc/crontabs/root 2>/dev/null || true
+  echo '0 3 * * 3,6 /usr/local/sbin/update_geoip2.sh >/var/log/update_geoip2.log 2>&1' | $SUDO tee -a /etc/crontabs/root >/dev/null
+  $SUDO service crond restart 2>/dev/null || $SUDO rc-service crond restart 2>/dev/null || true
 fi
 
 # ===== UFW 基線（自動安裝；若無法裝則跳過）=====
@@ -515,7 +515,7 @@ if [ "${UFW_BASELINE:-yes}" = "yes" ]; then
   if ! command -v ufw >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
       echo ">> 未偵測到 UFW，正在安裝..."
-      if sudo apt-get update -y && sudo apt-get install -y ufw; then
+      if $SUDO apt-get update -y && $SUDO apt-get install -y ufw; then
         :
       else
         echo "!! UFW 安裝失敗，跳過 UFW 基線"
@@ -532,37 +532,37 @@ if [ "$UFW_BASELINE" = "yes" ] && command -v ufw >/dev/null 2>&1; then
 
   # 開啟 IPv6 支援（若設定檔存在）
   if [ -f /etc/default/ufw ]; then
-    sudo sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw || true
+    $SUDO sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw || true
   fi
 
   # 基線策略
-  sudo ufw default deny incoming
-  sudo ufw default allow outgoing
+  $SUDO ufw default deny incoming
+  $SUDO ufw default allow outgoing
 
   # 對外開放的服務
-  sudo ufw allow 80/tcp  comment 'http open to world'
-  sudo ufw allow 443/tcp comment 'https open to world'
+  $SUDO ufw allow 80/tcp  comment 'http open to world'
+  $SUDO ufw allow 443/tcp comment 'https open to world'
 
   # 僅內網可用的服務
-  sudo ufw allow from "$LAN_CIDR" to any port 22   proto tcp comment 'ssh from LAN'
-  sudo ufw allow from "$LAN_CIDR" to any port 8080 proto tcp comment '8080 from LAN'
+  $SUDO ufw allow from "$LAN_CIDR" to any port 22   proto tcp comment 'ssh from LAN'
+  $SUDO ufw allow from "$LAN_CIDR" to any port 8080 proto tcp comment '8080 from LAN'
 
   # （可選）把 SSH 改限速
   if [ "${UFW_SSH_LIMIT:-no}" = "yes" ]; then
-    mapfile -t del_idx < <(sudo ufw status numbered | \
+    mapfile -t del_idx < <($SUDO ufw status numbered | \
       awk -v p="22/tcp" -v c="$LAN_CIDR" '$0 ~ /^\[/ && $2==p && index($0,c)>0 { gsub(/[\[\]]/,"",$1); print $1 }' | sort -nr)
-    for i in "${del_idx[@]:-}"; do sudo ufw --force delete "$i" || true; done
-    sudo ufw limit from "$LAN_CIDR" to any port 22 proto tcp comment 'ssh from LAN (limit)'
+    for i in "${del_idx[@]:-}"; do $SUDO ufw --force delete "$i" || true; done
+    $SUDO ufw limit from "$LAN_CIDR" to any port 22 proto tcp comment 'ssh from LAN (limit)'
   fi
 
   # 啟用 + 設為開機自動啟用（若有 systemd）
-  sudo ufw --force enable
+  $SUDO ufw --force enable
   if command -v systemctl >/dev/null 2>&1; then
-    sudo systemctl enable --now ufw 2>/dev/null || true
+    $SUDO systemctl enable --now ufw 2>/dev/null || true
   fi
 
-  sudo ufw reload
-  sudo ufw status verbose
+  $SUDO ufw reload
+  $SUDO ufw status verbose
 else
   echo ">> 跳過 UFW 基線（UFW_BASELINE=$UFW_BASELINE 或未安裝 UFW）"
 fi
@@ -575,8 +575,8 @@ ensure_nginx_run_user() {
     RUN_USER="www-data"; RUN_GROUP="www-data"
   else
     RUN_USER="nginx"; RUN_GROUP="nginx"
-    getent group nginx >/dev/null 2>&1 || sudo groupadd --system nginx
-    getent passwd nginx >/dev/null 2>&1 || sudo useradd --system --no-create-home \
+    getent group nginx >/dev/null 2>&1 || $SUDO groupadd --system nginx
+    getent passwd nginx >/dev/null 2>&1 || $SUDO useradd --system --no-create-home \
       --shell /usr/sbin/nologin --gid nginx --home-dir /nonexistent nginx
   fi
 
@@ -584,48 +584,48 @@ ensure_nginx_run_user() {
   if grep -qE '^\s*user\s+' /etc/nginx/nginx.conf; then
     EXISTING_USER="$(awk '/^\s*user\s+/{print $2}' /etc/nginx/nginx.conf | tr -d ' ;')"
     if ! getent passwd "$EXISTING_USER" >/dev/null 2>&1; then
-      sudo sed -i "s/^\s*user\s\+\S\+\s*;/user ${RUN_USER};/" /etc/nginx/nginx.conf
+      $SUDO sed -i "s/^\s*user\s\+\S\+\s*;/user ${RUN_USER};/" /etc/nginx/nginx.conf
     fi
   else
-    sudo sed -i "1a user ${RUN_USER};" /etc/nginx/nginx.conf
+    $SUDO sed -i "1a user ${RUN_USER};" /etc/nginx/nginx.conf
   fi
 
   # 建立 temp/cache 目錄並指定擁有者（對應你的 --http-*_temp-path）
-  sudo install -d -m 0755 -o "$RUN_USER" -g "$RUN_GROUP" /var/cache/nginx/{client_temp,proxy_temp,fastcgi_temp,uwsgi_temp,scgi_temp}
+  $SUDO install -d -m 0755 -o "$RUN_USER" -g "$RUN_GROUP" /var/cache/nginx/{client_temp,proxy_temp,fastcgi_temp,uwsgi_temp,scgi_temp}
 }
 ensure_nginx_run_user
 
 # 再驗證一次（這裡才檢查，以免 user 未就緒）
-sudo nginx -t || { echo "nginx -t 仍失敗，請檢查 /etc/nginx/nginx.conf"; exit 1; }
+$SUDO nginx -t || { echo "nginx -t 仍失敗，請檢查 /etc/nginx/nginx.conf"; exit 1; }
 
 # ===== 可選：切換為「80/443 只允許 Cloudflare」=====
 # 使用方式：執行腳本時帶 CF_ONLY_HTTP=yes
-# 例如：CF_ONLY_HTTP=yes sudo bash /root/nginx_build_geoip2.sh
+# 例如：CF_ONLY_HTTP=yes $SUDO bash /root/nginx_build_geoip2.sh
 if [ "${CF_ONLY_HTTP:-no}" = "yes" ] && command -v ufw >/dev/null 2>&1; then
   echo ">> 切換為『80/443 只允許 Cloudflare』：先同步 CF 白名單，再移除世界開放規則"
   UFW_SYNC=1 /usr/local/sbin/update_geoip2.sh || true
-  sudo ufw delete allow 80/tcp  2>/dev/null || true
-  sudo ufw delete allow 443/tcp 2>/dev/null || true
-  sudo ufw status numbered | sed -n '1,80p'
+  $SUDO ufw delete allow 80/tcp  2>/dev/null || true
+  $SUDO ufw delete allow 443/tcp 2>/dev/null || true
+  $SUDO ufw status numbered | sed -n '1,80p'
 fi
 
 # ===== 首次更新、驗證 =====
 echo ">> 先啟動 Nginx（若尚未啟動）"
-sudo nginx -t && (pgrep -x nginx >/dev/null || sudo nginx)
+$SUDO nginx -t && (pgrep -x nginx >/dev/null || $SUDO nginx)
 
 echo ">> 首次執行 update_geoip2.sh"
 UFW_SYNC="$UFW_SYNC_DEFAULT" /usr/local/sbin/update_geoip2.sh || true
 
 # ===== 最終驗證並套用 =====
-sudo nginx -t && (sudo systemctl restart nginx 2>/dev/null || sudo nginx -s reload)
+$SUDO nginx -t && ($SUDO systemctl restart nginx 2>/dev/null || $SUDO nginx -s reload)
 
 # =====（apt 系列）鎖定 nginx 避免自動升級 =====
 if command -v apt-mark >/dev/null 2>&1; then
-  sudo apt-mark hold nginx || true
+  $SUDO apt-mark hold nginx || true
 fi
 
 echo "✅ 完成。下一次自動更新：每週三、六 03:00。"
 echo "   若要切換成『80/443 只允許 Cloudflare』："
-echo "     1) 刪世界開放： sudo ufw delete allow 80/tcp ; sudo ufw delete allow 443/tcp"
-echo "     2) 開啟同步：   sudo bash -c 'echo export UFW_SYNC=1 >> /etc/environment'"
-echo "     3) 立即同步：   UFW_SYNC=1 /usr/local/sbin/update_geoip2.sh && sudo ufw status numbered"
+echo "     1) 刪世界開放： $SUDO ufw delete allow 80/tcp ; $SUDO ufw delete allow 443/tcp"
+echo "     2) 開啟同步：   $SUDO bash -c 'echo export UFW_SYNC=1 >> /etc/environment'"
+echo "     3) 立即同步：   UFW_SYNC=1 /usr/local/sbin/update_geoip2.sh && $SUDO ufw status numbered"
