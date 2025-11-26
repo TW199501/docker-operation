@@ -151,7 +151,7 @@ module_C_source_and_deps() {
       $SUDO apt-get update -yq
       $SUDO apt-get install -yq \
         build-essential zlib1g-dev libssl-dev libmaxminddb0 libmaxminddb-dev mmdb-bin \
-        autoconf autopoint gettext libncursesw5-dev language-pack-zh-hans \
+        autoconf autopoint gettext libncursesw5-dev \
         unzip git libpcre2-dev libxml2-dev libxslt1-dev libmodsecurity3 libmodsecurity-dev libgd-dev \
         curl wget cmake libbrotli-dev
     else
