@@ -712,7 +712,7 @@ export https_proxy="${https_proxy:-}"
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
@@ -722,18 +722,18 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
   msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
 else
-  msg_info "Adding QEMU Guest Agent to Debian 13 Qcow2 Disk Image"
-  # Try to install qemu-guest-agent with retry logic for network issues
-  if virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null 2>&1; then
+  msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
+  # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
+  if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-    msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
+    msg_ok "Added QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image successfully"
   else
-    msg_error "Failed to install qemu-guest-agent due to network issues. Continuing without it..."
-    # Skip qemu-guest-agent installation but continue with other customizations
+    msg_error "Failed to install packages due to network issues. Continuing..."
+    # Skip installation but continue with other customizations
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null 2>&1 &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null 2>&1
-    msg_ok "VM image customized (without qemu-guest-agent)"
+    msg_ok "VM image customized (without additional packages)"
   fi
 fi
 
