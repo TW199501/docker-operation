@@ -3,7 +3,8 @@ services:
         image: cloudflare/cloudflared:latest
         container_name: cloudflare-tunnel
         restart: unless-stopped
-        command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+        #command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+        command: tunnel --no-autoupdate --protocol http2 run --token ${CLOUDFLARE_TUNNEL_TOKEN} #改用此段強制走HTTP2不走QUIC協定穩定度較佳
         volumes:
             - /etc/localtime:/etc/localtime:ro
         # 若需要自訂名稱解析，用這個，不要覆蓋 /etc/hosts
