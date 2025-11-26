@@ -500,9 +500,23 @@ msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
 URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
-curl -f#SL -o "$(basename "$URL")" "$URL"
+
+# Download the image with error handling
+if ! curl -f#SL -o "$(basename "$URL")" "$URL"; then
+  msg_error "Failed to download Debian 13 image from ${URL}"
+  msg_error "Please check your internet connection and try again"
+  exit 1
+fi
+
 echo -en "\e[1A\e[0K"
-FILE=$(basename $URL)
+FILE=$(basename "$URL")
+
+# Verify the downloaded file exists and has content
+if [ ! -f "$FILE" ] || [ ! -s "$FILE" ]; then
+  msg_error "Downloaded file is missing or empty: $FILE"
+  exit 1
+fi
+
 msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
 STORAGE_TYPE=$(pvesm status -storage "$STORAGE" | awk 'NR>1 {print $2}')
