@@ -826,8 +826,12 @@ fi
 
 # Set SSH public key if provided
 if [ -n "${CI_SSHKEY:-}" ]; then
-  qm set $VMID --sshkeys "${CI_SSHKEY}" >/dev/null
-  msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP}, SSH Key: Yes)"
+  # URL encode the SSH key for Proxmox
+  ENCODED_KEY=$(echo -n "${CI_SSHKEY}" | jq -sRr @uri 2>/dev/null || echo -n "${CI_SSHKEY}")
+  qm set $VMID --sshkeys "$ENCODED_KEY" >/dev/null
+  # Ensure password authentication is still enabled
+  qm set $VMID --cipassword "${CI_PASSWORD:-debian}" >/dev/null
+  msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP}, SSH Key: Yes, Password: Enabled)"
 else
   msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP})"
 fi
@@ -850,6 +854,15 @@ if [ "$START_VM" == "yes" ]; then
   msg_info "Starting Debian 13 VM"
   qm start $VMID
   msg_ok "Started Debian 13 VM"
+  echo ""
+  msg_info "⏳ Please wait 2-3 minutes for Cloud-Init to complete initialization"
+  msg_info "📋 Login credentials:"
+  msg_info "   User: ${CI_USER:-debian}"
+  msg_info "   Password: ${CI_PASSWORD:-debian}"
+  msg_info "   Network: ${CI_IP_CONFIG:-DHCP}"
+  echo ""
+  msg_info "💡 To check Cloud-Init status, use Proxmox Console and run:"
+  msg_info "   cloud-init status --wait"
 fi
 ## post_update_to_api "done" "none"
 msg_ok "Completed Successfully!"
