@@ -232,6 +232,14 @@ function default_settings() {
     echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}no${CL}"
     INSTALL_DOCKER="no"
   fi
+
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}yes${CL}"
+    INSTALL_NODE_EXPORTER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}no${CL}"
+    INSTALL_NODE_EXPORTER="no"
+  fi
 }
 
 function advanced_settings() {
@@ -409,6 +417,14 @@ function advanced_settings() {
     INSTALL_DOCKER="no"
   fi
 
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}yes${CL}"
+    INSTALL_NODE_EXPORTER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}no${CL}"
+    INSTALL_NODE_EXPORTER="no"
+  fi
+
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
     echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
     START_VM="yes"
@@ -579,6 +595,38 @@ else
   fi
 fi
 
+# Install Node Exporter if requested
+if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
+  msg_info "Adding Prometheus Node Exporter to Debian 13 Qcow2 Disk Image"
+  
+  # Download and install Node Exporter
+  virt-customize -q -a "${FILE}" --run-command "useradd --no-create-home --shell /bin/false node_exporter" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "curl -fsSL https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -o /tmp/node_exporter.tar.gz" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "tar -xzf /tmp/node_exporter.tar.gz -C /tmp && mv /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/ && rm -rf /tmp/node_exporter*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "chown node_exporter:node_exporter /usr/local/bin/node_exporter" >/dev/null
+  
+  # Create systemd service file
+  virt-customize -q -a "${FILE}" --run-command "cat > /etc/systemd/system/node_exporter.service << 'EOF'
+[Unit]
+Description=Prometheus Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+EOF" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "systemctl enable node_exporter" >/dev/null
+  
+  msg_ok "Added Prometheus Node Exporter to Debian 13 Qcow2 Disk Image successfully"
+  msg_info "Node Exporter will be available on port 9100"
+fi
+
 # msg_info "Expanding root partition to use full disk space"
 # qemu-img create -f qcow2 expanded.qcow2 ${DISK_SIZE} >/dev/null 2>&1
 # # 使用更可靠的分區檢測方法
@@ -603,6 +651,11 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
   VM_TAG="debian13-docker"
 else
   VM_TAG="debian13"
+fi
+
+# Add node-exporter tag if installed
+if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
+  VM_TAG="${VM_TAG};node-exporter"
 fi
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags $VM_TAG -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
