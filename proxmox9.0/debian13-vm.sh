@@ -461,6 +461,7 @@ start_script
 #post_to_api_vm
 
 msg_info "Validating Storage"
+# Suppress errors from unavailable storage backends (e.g., offline PBS)
 while read -r line; do
   TAG=$(echo $line | awk '{print $1}')
   TYPE=$(echo $line | awk '{printf "%-10s", $2}')
@@ -471,8 +472,13 @@ while read -r line; do
     MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
   fi
   STORAGE_MENU+=("$TAG" "$ITEM" "OFF")
-done < <(pvesm status -content images | awk 'NR>1')
-VALID=$(pvesm status -content images | awk 'NR>1')
+done < <(pvesm status -content images 2>/dev/null | awk 'NR>1')
+VALID=$(pvesm status -content images 2>/dev/null | awk 'NR>1')
+
+# Check if any storage backends failed to connect
+if pvesm status -content images 2>&1 | grep -qi "error\|can't connect\|connection refused"; then
+  echo -e "${YW}ℹ️  Note: Some storage backends are currently unavailable (this won't affect VM creation)${CL}"
+fi
 if [ -z "$VALID" ]; then
   msg_error "Unable to detect a valid storage location."
   exit
