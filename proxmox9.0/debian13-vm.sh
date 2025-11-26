@@ -502,22 +502,28 @@ sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 
 # Download the image with error handling
-if ! curl -f#SL -o "$(basename "$URL")" "$URL"; then
-  msg_error "Failed to download Debian 13 image from ${URL}"
+FILE=$(basename "$URL")
+msg_info "Downloading to: $(pwd)/$FILE"
+
+if curl -f#SL -o "$FILE" "$URL"; then
+  echo -en "\e[1A\e[0K"
+  
+  # Verify the downloaded file
+  if [ -f "$FILE" ] && [ -s "$FILE" ]; then
+    FILE_SIZE=$(du -h "$FILE" | cut -f1)
+    msg_ok "Downloaded ${CL}${BL}${FILE}${CL} (${FILE_SIZE})"
+  else
+    msg_error "Download completed but file is missing or empty"
+    msg_error "Expected file: $(pwd)/$FILE"
+    ls -lh "$(pwd)" 2>/dev/null || true
+    exit 1
+  fi
+else
+  msg_error "Failed to download Debian 13 image"
+  msg_error "URL: ${URL}"
   msg_error "Please check your internet connection and try again"
   exit 1
 fi
-
-echo -en "\e[1A\e[0K"
-FILE=$(basename "$URL")
-
-# Verify the downloaded file exists and has content
-if [ ! -f "$FILE" ] || [ ! -s "$FILE" ]; then
-  msg_error "Downloaded file is missing or empty: $FILE"
-  exit 1
-fi
-
-msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
 STORAGE_TYPE=$(pvesm status -storage "$STORAGE" | awk 'NR>1 {print $2}')
 case $STORAGE_TYPE in
@@ -558,15 +564,23 @@ lvm | lvm-thin)
   FORMAT=",efitype=4m"
   THIN=""
   ;;
+rbd)
+  DISK_EXT=""
+  DISK_REF=""
+  DISK_IMPORT="-format raw"
+  FORMAT=",efitype=4m"
+  THIN=""
+  msg_info "檢測到 Ceph RBD 儲存類型，應用 RBD 優化設置..."
+  ;;
 *)
   msg_error "不支持的儲存類型: $STORAGE_TYPE"
-  msg_error "支持: nfs, dir, btrfs, zfs, zfspool, lvm, lvm-thin"
+  msg_error "支持: nfs, dir, btrfs, zfs, zfspool, lvm, lvm-thin, rbd"
   exit 1
   ;;
 esac
 for i in {0,1}; do
   disk="DISK$i"
-  if [[ "$STORAGE_TYPE" == "zfspool" ]]; then
+  if [[ "$STORAGE_TYPE" == "zfspool" ]] || [[ "$STORAGE_TYPE" == "rbd" ]]; then
     # ZFSPool uses different naming convention
     eval DISK${i}=vm-${VMID}-disk-${i}
     eval DISK${i}_REF=${STORAGE}:${!disk}
