@@ -479,7 +479,9 @@ VALID=$(pvesm status -content images 2>/dev/null | awk 'NR>1')
 if pvesm status -content images 2>&1 | grep -qi "error\|can't connect\|connection refused"; then
   echo -e "${YW}ℹ️  Note: Some storage backends are currently unavailable (this won't affect VM creation)${CL}"
 fi
-if [ -z "$VALID" ]; then
+
+# Validate that we have at least one available storage
+if [ ${#STORAGE_MENU[@]} -eq 0 ]; then
   msg_error "Unable to detect a valid storage location."
   exit
 elif [ $((${#STORAGE_MENU[@]} / 3)) -eq 1 ]; then
