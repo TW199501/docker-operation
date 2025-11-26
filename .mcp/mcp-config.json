@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "filesystem": {
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", ""],
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "d:/app/docker-operation"],
       "command": "npx",
       "disabled": false,
       "env": {}
@@ -17,7 +17,7 @@
       "command": "npx",
       "disabled": false,
       "env": {
-        "MEMORY_FILE_PATH": "d:/appdocker-operation/.mcp/memory.json"
+        "MEMORY_FILE_PATH": "d:/app/docker-operation/.mcp/memory.json"
       }
     },
     "puppeteer": {

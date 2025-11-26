@@ -151,5 +151,11 @@
     "editor.defaultFormatter": null  // 使用語言預設格式化工具，避免無效擴充套件
 },
 "editor.fontSize": 14,
-"editor.fontVariations": false
+"editor.fontVariations": false,
+"window.density.editorTabHeight": "compact",
+"workbench.editor.autoLockGroups": {
+    "default": true
+},
+"workbench.editor.alwaysShowEditorActions": true,
+"kiroAgent.configureMCP": "Disabled"
 }
