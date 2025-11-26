@@ -9,7 +9,7 @@ set -euo pipefail
 
 # ===== 全域預設變數（可被環境變數覆蓋，確保在 module_A 之前就有值）=====
 BUILD_DIR=${BUILD_DIR:-/home/nginx_build_geoip2}
-NGINX_VERSION=${NGINX_VERSION:-1.29.1}
+NGINX_VERSION=${NGINX_VERSION:-1.29.3}
 LAN_CIDR=${LAN_CIDR:-"192.168.25.0/24"}
 NGINX_ETC=${NGINX_ETC:-/etc/nginx}
 
