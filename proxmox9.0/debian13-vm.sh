@@ -240,6 +240,18 @@ function default_settings() {
     echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}no${CL}"
     INSTALL_NODE_EXPORTER="no"
   fi
+
+  # Set Cloud-Init defaults
+  CI_USER="debian"
+  CI_PASSWORD="debian"
+  CI_IP_CONFIG="ip=dhcp"
+  CI_NAMESERVER="8.8.8.8 1.1.1.1"
+  CI_SSHKEY=""
+  CONFIGURE_CLOUDINIT="yes"
+  echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init User: ${BGN}debian${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Password: ${BGN}debian${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Network: ${BGN}DHCP${CL}"
+  msg_info "⚠️  Default password is 'debian' - Please change after first login!"
 }
 
 function advanced_settings() {
@@ -431,6 +443,100 @@ function advanced_settings() {
   else
     echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}no${CL}"
     START_VM="no"
+  fi
+
+  # Cloud-Init Configuration
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT CONFIGURATION" --yesno "Configure Cloud-Init (user, password, network)?" 10 58); then
+    # Username
+    if CI_USER=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Cloud-Init username" 8 58 debian --title "CLOUD-INIT USER" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -z "$CI_USER" ]; then
+        CI_USER="debian"
+      fi
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init User: ${BGN}$CI_USER${CL}"
+    else
+      CI_USER="debian"
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init User: ${BGN}$CI_USER (default)${CL}"
+    fi
+
+    # Password
+    if CI_PASSWORD=$(whiptail --backtitle "Proxmox VE Helper Scripts" --passwordbox "Set Cloud-Init password" 8 58 --title "CLOUD-INIT PASSWORD" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -z "$CI_PASSWORD" ]; then
+        CI_PASSWORD="debian"
+      fi
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Password: ${BGN}***${CL}"
+    else
+      CI_PASSWORD="debian"
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Password: ${BGN}*** (default)${CL}"
+    fi
+
+    # Network Configuration
+    if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "NETWORK CONFIG" --yesno "Use DHCP for network configuration?" --defaultno 10 58); then
+      CI_IP_CONFIG="ip=dhcp"
+      echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP${CL}"
+    else
+      # Static IP
+      if CI_IP=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set static IP address (e.g., 192.168.1.100/24)" 8 58 --title "STATIC IP" --cancel-button Skip 3>&1 1>&2 2>&3); then
+        if [ -n "$CI_IP" ]; then
+          # Gateway
+          if CI_GW=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set gateway address" 8 58 --title "GATEWAY" --cancel-button Skip 3>&1 1>&2 2>&3); then
+            if [ -n "$CI_GW" ]; then
+              CI_IP_CONFIG="ip=${CI_IP},gw=${CI_GW}"
+              echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP, Gateway: $CI_GW${CL}"
+            else
+              CI_IP_CONFIG="ip=${CI_IP}"
+              echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP${CL}"
+            fi
+          else
+            CI_IP_CONFIG="ip=${CI_IP}"
+            echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP${CL}"
+          fi
+        else
+          CI_IP_CONFIG="ip=dhcp"
+          echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP (fallback)${CL}"
+        fi
+      else
+        CI_IP_CONFIG="ip=dhcp"
+        echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP (fallback)${CL}"
+      fi
+    fi
+
+    # DNS Configuration
+    if CI_DNS=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set DNS nameservers (space-separated, e.g., 8.8.8.8 1.1.1.1)" 8 58 "8.8.8.8 1.1.1.1" --title "DNS SERVERS" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -n "$CI_DNS" ]; then
+        CI_NAMESERVER="$CI_DNS"
+        echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}$CI_DNS${CL}"
+      else
+        CI_NAMESERVER="8.8.8.8 1.1.1.1"
+        echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}8.8.8.8 1.1.1.1 (default)${CL}"
+      fi
+    else
+      CI_NAMESERVER="8.8.8.8 1.1.1.1"
+      echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}8.8.8.8 1.1.1.1 (default)${CL}"
+    fi
+
+    # SSH Public Key (optional)
+    if CI_SSHKEY=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Paste SSH public key (optional, leave blank to skip)" 10 58 --title "SSH PUBLIC KEY" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -n "$CI_SSHKEY" ]; then
+        echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Configured${CL}"
+      else
+        CI_SSHKEY=""
+        echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Not configured${CL}"
+      fi
+    else
+      CI_SSHKEY=""
+      echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Not configured${CL}"
+    fi
+
+    CONFIGURE_CLOUDINIT="yes"
+  else
+    # Use defaults
+    CI_USER="debian"
+    CI_PASSWORD="debian"
+    CI_IP_CONFIG="ip=dhcp"
+    CI_NAMESERVER="8.8.8.8 1.1.1.1"
+    CI_SSHKEY=""
+    CONFIGURE_CLOUDINIT="yes"
+    echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init: ${BGN}Using defaults (debian/debian, DHCP)${CL}"
   fi
 
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Debian 13 VM?" --no-button Do-Over 10 58); then
@@ -702,13 +808,33 @@ qm set $VMID \
   -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
-# qm resize $VMID scsi0 8G >/dev/null
-# 若仍想保留 resize 動作，請用你選的 DISK_SIZE（或乾脆刪掉這行）
 qm resize $VMID scsi0 "$DISK_SIZE" >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
-# qm set $VMID --agent enabled=1 >/dev/null
-# 讓 PVE 的 Cloud-Init 設定生效（之後可在 GUI 的 Cloud-Init 分頁填 user/ssh/ipconfig0）
+# 讓 PVE 的 Cloud-Init 設定生效
 qm set $VMID --ide2 $STORAGE:cloudinit
+
+# Configure Cloud-Init with user settings
+msg_info "Configuring Cloud-Init..."
+qm set $VMID --ciuser "${CI_USER:-debian}" >/dev/null
+qm set $VMID --cipassword "${CI_PASSWORD:-debian}" >/dev/null
+qm set $VMID --ipconfig0 "${CI_IP_CONFIG:-ip=dhcp}" >/dev/null
+
+# Set DNS nameservers if configured
+if [ -n "${CI_NAMESERVER:-}" ]; then
+  qm set $VMID --nameserver "${CI_NAMESERVER}" >/dev/null
+fi
+
+# Set SSH public key if provided
+if [ -n "${CI_SSHKEY:-}" ]; then
+  qm set $VMID --sshkeys "${CI_SSHKEY}" >/dev/null
+  msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP}, SSH Key: Yes)"
+else
+  msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP})"
+fi
+
+if [ "${CI_PASSWORD:-debian}" == "debian" ]; then
+  msg_info "⚠️  Using default password 'debian' - Please change after first login!"
+fi
 
 DESCRIPTION=$(
   cat <<EOF
