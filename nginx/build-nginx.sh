@@ -357,8 +357,8 @@ MODULES=(
   ngx_stream_js_module.so
 )
 
-# 重新生成模組設定（寫入 conf.d/modules.conf）
-MODULES_CONF="$NGINX_ETC/conf.d/modules.conf"
+# 重新生成模組設定（寫入 modules.conf，供 main context 載入）
+MODULES_CONF="$NGINX_ETC/modules.conf"
 $SUDO rm -f "$MODULES_CONF"
 {
   for so in "${MODULES[@]}"; do
@@ -367,6 +367,12 @@ $SUDO rm -f "$MODULES_CONF"
     fi
   done
 } | $SUDO tee "$MODULES_CONF" >/dev/null
+
+# 確保 modules.conf 在 main context 被 include
+if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules\.conf;?' /etc/nginx/nginx.conf; then
+  echo ">> 在 nginx.conf 最前加入 modules.conf include"
+  $SUDO sed -i '1i include /etc/nginx/modules.conf;' /etc/nginx/nginx.conf
+fi
 
 # 建立 SSL 通用配置（如不存在）
 if [ ! -f "$NGINX_ETC/conf.d/ssl.conf" ]; then

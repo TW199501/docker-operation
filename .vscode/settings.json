@@ -79,7 +79,7 @@
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
   "editor.insertSpaces": true,
-  "editor.tabSize": 4,
+  "editor.tabSize": 2,
   "editor.detectIndentation": false,
   "files.autoGuessEncoding": true,
 
@@ -150,7 +150,7 @@
   "[shellscript]": {
     "editor.defaultFormatter": null  // 使用語言預設格式化工具，避免無效擴充套件
 },
-"editor.fontSize": 15,
+"editor.fontSize": 14,
 "editor.fontVariations": false,
 "window.density.editorTabHeight": "compact",
 "workbench.editor.autoLockGroups": {
@@ -170,5 +170,6 @@
 "editor.inlineSuggest.triggerCommandOnProviderChange": false,
 "editor.quickSuggestions": {
     "other": "off"
-}
+},
+"telemetry.editStats.enabled": false
 }

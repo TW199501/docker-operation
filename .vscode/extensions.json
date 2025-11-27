@@ -35,7 +35,8 @@
     // 可選的擴展 (按需安裝)
     "ms-vscode.vscode-json",          // JSON 語言支持
     "ms-vscode.vscode-markdown",      // Markdown 支持
-    "yzhang.markdown-all-in-one"      // Markdown All in One
+    "yzhang.markdown-all-in-one",
+    "gruntfuggly.todo-tree" // Markdown All in One
   ],
 
   "unwantedRecommendations": [
