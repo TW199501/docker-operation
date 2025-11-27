@@ -133,7 +133,6 @@ module_C_source_and_deps() {
   git clone --depth=1 https://github.com/openresty/headers-more-nginx-module.git "$BUILD_DIR/headers-more-nginx-module"
   git clone --depth=1 https://github.com/FRiCKLE/ngx_cache_purge.git "$BUILD_DIR/ngx_cache_purge"
   git clone --depth=1 https://github.com/nginx/njs.git "$BUILD_DIR/njs"
-  git clone --depth=1 https://github.com/PCRE2Project/pcre2.git "$BUILD_DIR/pcre2"
   git clone --depth=1 https://github.com/allinurl/goaccess.git "$BUILD_DIR/goaccess"
 
   # ===== 依賴安裝（先定義 SUDO / need_install）=====
@@ -178,6 +177,25 @@ module_C_source_and_deps() {
 
   cd "$BUILD_DIR"
 
+  # 先編譯安裝 libmaxminddb，提供 ngx_http_geoip2_module 所需的 libmaxminddb.so.0
+  echo ">> 下載並編譯 libmaxminddb 1.7.1"
+  LIBMAX_VER=1.7.1
+  curl -fL --retry 3 -o "libmaxminddb-$LIBMAX_VER.tar.gz" \
+    "https://github.com/maxmind/libmaxminddb/releases/download/$LIBMAX_VER/libmaxminddb-$LIBMAX_VER.tar.gz"
+  tar -xzf "libmaxminddb-$LIBMAX_VER.tar.gz"
+  (
+    cd "libmaxminddb-$LIBMAX_VER" && \
+    ./configure && \
+    make -j"$(nproc)" && \
+    $SUDO make install
+  )
+
+  # 抓 PCRE2（使用官方釋出版，內含 configure/Makefile）
+  echo ">> 下載 PCRE2 10.47 釋出版"
+  curl -fL --retry 3 -o pcre2-10.47.tar.gz \
+    "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.gz"
+  tar -xzf pcre2-10.47.tar.gz
+
   # 抓 zlib (1.3.1)
   ZLIB_VER=1.3.1
   curl -fL --retry 3 -o "zlib-$ZLIB_VER.tar.gz" \
@@ -216,7 +234,7 @@ module_D_build_nginx_and_base_init() {
   cd "$BUILD_DIR/nginx-${NGINX_VERSION}"
   make clean || true
   ./configure \
-  --with-pcre="$BUILD_DIR/pcre2" \
+  --with-pcre="$BUILD_DIR/pcre2-10.47" \
   --with-pcre-jit \
   --prefix=/etc/nginx \
   --sbin-path=/usr/sbin/nginx \
@@ -260,11 +278,7 @@ make modules -j"$(nproc)"
 $SUDO mkdir -p /usr/lib/nginx/modules
 $SUDO cp objs/*.so /usr/lib/nginx/modules/
 
-echo ">> build GoAccess (git)"
-cd "$BUILD_DIR/goaccess"
-./configure --enable-utf8 --enable-geoip=mmdb
-make
-$SUDO make install
+echo ">> 略過 GoAccess 安裝（將在安裝 WAF 時再處理）"
 
 # 模組載入首次安裝：全載 + 存在檢查
 echo ">> 初始化 Nginx 目錄與模組（首次安裝）"
@@ -301,8 +315,6 @@ MODULES=(
   ngx_http_js_module.so
   ngx_stream_module.so
   ngx_stream_geoip2_module.so
-  ngx_stream_js_module.so
-  ngx_mail_module.so
 )
 
 # 重新生成模組設定（寫入 conf.d/modules.conf）
@@ -362,10 +374,10 @@ if [ ! -e /etc/nginx/sites-enabled/default.conf ]; then
   $SUDO ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
 fi
 
-# 初始化 IP 白名單配置（如不存在）
-if [ ! -f /etc/nginx/conf.d/ip_whitelist.conf ]; then
-  echo ">> 建立 /etc/nginx/conf.d/ip_whitelist.conf 範例"
-  $SUDO tee /etc/nginx/conf.d/ip_whitelist.conf >/dev/null << 'NG'
+# 初始化 IP 白名單配置（如不存在，存放於 /etc/nginx/geoip）
+if [ ! -f /etc/nginx/geoip/ip_whitelist.conf ]; then
+  echo ">> 建立 /etc/nginx/geoip/ip_whitelist.conf 範例"
+  $SUDO tee /etc/nginx/geoip/ip_whitelist.conf >/dev/null << 'NG'
 # IP 白名單配置（由 /etc/nginx/scripts/manage_ip.sh 維護）
 # 預設全部拒絕，按需加入 allow 規則
 deny all;
@@ -376,10 +388,10 @@ deny all;
 NG
 fi
 
-# 初始化 IP 黑名單配置（如不存在）
-if [ ! -f /etc/nginx/conf.d/ip_blacklist.conf ]; then
-  echo ">> 建立 /etc/nginx/conf.d/ip_blacklist.conf 範例"
-  $SUDO tee /etc/nginx/conf.d/ip_blacklist.conf >/dev/null <<'BL'
+# 初始化 IP 黑名單配置（如不存在，存放於 /etc/nginx/geoip）
+if [ ! -f /etc/nginx/geoip/ip_blacklist.conf ]; then
+  echo ">> 建立 /etc/nginx/geoip/ip_blacklist.conf 範例"
+  $SUDO tee /etc/nginx/geoip/ip_blacklist.conf >/dev/null <<'BL'
 # IP 黑名單配置
 # 預設全部允許，按需加入 deny 規則
 allow all;
@@ -418,10 +430,10 @@ ASN_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
 CF_V4_URL="https://www.cloudflare.com/ips-v4"
 CF_V6_URL="https://www.cloudflare.com/ips-v6"
 
-$SUDO mkdir -p /etc/nginx/geoip
-$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-ASN.mmdb     "$ASN_URL"
-$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-City.mmdb    "$CITY_URL"
-$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "$COUNTRY_URL"
+$SUDO mkdir -p /usr/share/GeoIP
+$SUDO wget -q -O /usr/share/GeoIP/GeoLite2-ASN.mmdb     "$ASN_URL"
+$SUDO wget -q -O /usr/share/GeoIP/GeoLite2-City.mmdb    "$CITY_URL"
+$SUDO wget -q -O /usr/share/GeoIP/GeoLite2-Country.mmdb "$COUNTRY_URL"
 
 # Cloudflare IP初始化
   echo ">> 初始化 Cloudflare real_ip 與 conf.d/cloudflare.conf"
@@ -434,7 +446,7 @@ $SUDO wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "$COUNTRY_URL"
   $SUDO install -m0644 "$TMP_CF/cloudflare_v4_realip.conf" /etc/nginx/geoip/cloudflare_v4_realip.conf
   $SUDO install -m0644 "$TMP_CF/cloudflare_v6_realip.conf" /etc/nginx/geoip/cloudflare_v6_realip.conf
 
-$SUDO tee /etc/nginx/conf.d/cloudflare.conf >/dev/null << 'NG'
+  $SUDO tee /etc/nginx/conf.d/cloudflare.conf >/dev/null << 'NG'
 
 # Cloudflare / cloudflared real_ip & GeoIP2
 include /etc/nginx/geoip/cloudflare_v4_realip.conf;
@@ -448,13 +460,13 @@ real_ip_recursive on;
 
 # GeoIP2
 geoip2_proxy_recursive on;
-geoip2 /etc/nginx/geoip/GeoLite2-Country.mmdb {
+geoip2 /usr/share/GeoIP/GeoLite2-Country.mmdb {
 auto_reload 5m;
 $geoip2_metadata_country_build metadata build_epoch;
 $geoip2_data_country_code source=$remote_addr country iso_code;
 $geoip2_data_country_name country names en;
 }
-geoip2 /etc/nginx/geoip/GeoLite2-City.mmdb {
+geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb {
 $geoip2_data_city_name city names en;
 $geoip2_data_city_longitude location longitude;
 $geoip2_data_city_latitude location latitude;
@@ -464,11 +476,12 @@ NG
 
 module_F_update_geoip_install_and_timer() {
   # 更新Geoip與Cloudflrae IP
-echo ">> 寫入 /etc/nginx/scripts/update_geoip.sh 每周三 六 03:00 跑"
-$SUDO tee /etc/nginx/scripts/update_geoip.sh >/dev/null <<'UPD'
+  echo ">> 寫入 /etc/nginx/scripts/update_geoip.sh 每周三 六 03:00 跑"
+  $SUDO tee /etc/nginx/scripts/update_geoip.sh >/dev/null <<'UPD'
 #!/usr/bin/env bash
 set -euo pipefail
-GEOIP_DIR="/etc/nginx/geoip"
+GEOIP_MMDB_DIR="/usr/share/GeoIP"
+GEOIP_CONF_DIR="/etc/nginx/geoip"
 COUNTRY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
 CITY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
 ASN_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
@@ -476,12 +489,12 @@ CF_V4_URL="https://www.cloudflare.com/ips-v4"
 CF_V6_URL="https://www.cloudflare.com/ips-v6"
 UFW_SYNC="${UFW_SYNC:-0}"
 
-mkdir -p "$GEOIP_DIR"
+mkdir -p "$GEOIP_MMDB_DIR" "$GEOIP_CONF_DIR"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 dl() {
-  curl -fL --retry 3 -o "$TMP/$2" "$1" && install -m0644 "$TMP/$2" "$GEOIP_DIR/$2"
+  curl -fL --retry 3 -o "$TMP/$2" "$1" && install -m0644 "$TMP/$2" "$GEOIP_MMDB_DIR/$2"
 }
 
 # 1) mmdb
@@ -489,11 +502,11 @@ dl "$COUNTRY_URL" "GeoLite2-Country.mmdb" || true
 dl "$CITY_URL"    "GeoLite2-City.mmdb"    || true
 dl "$ASN_URL"     "GeoLite2-ASN.mmdb"     || true
 
-# 2) CF real_ip
+# 2) CF real_ip（仍放在 /etc/nginx/geoip）
 curl -fsSL --retry 3 "$CF_V4_URL" | awk '{print "set_real_ip_from " $1 ";"}' > "$TMP/cf4.conf"
 curl -fsSL --retry 3 "$CF_V6_URL" | awk '{print "set_real_ip_from " $1 ";"}' > "$TMP/cf6.conf"
-install -m0644 "$TMP/cf4.conf" "$GEOIP_DIR/cloudflare_v4_realip.conf"
-install -m0644 "$TMP/cf6.conf" "$GEOIP_DIR/cloudflare_v6_realip.conf"
+install -m0644 "$TMP/cf4.conf" "$GEOIP_CONF_DIR/cloudflare_v4_realip.conf"
+install -m0644 "$TMP/cf6.conf" "$GEOIP_CONF_DIR/cloudflare_v6_realip.conf"
 
 # 3) 重載 nginx:不再執行 nginx -t,只做 reload
 if pgrep -x nginx >/dev/null 2>&1; then
@@ -601,9 +614,11 @@ UPD
 
 $SUDO chmod +x /etc/nginx/scripts/manage_ip.sh
 
-# 測試並重新加載 Nginx 配置
-if $SUDO nginx -t; then
-  $SUDO systemctl reload nginx 2>/dev/null || $SUDO nginx -s reload || true
+# 測試並重新加載 Nginx 配置（僅在系統已有 nginx 指令時執行）
+if command -v nginx >/dev/null 2>&1; then
+  if $SUDO nginx -t; then
+    $SUDO systemctl reload nginx 2>/dev/null || $SUDO nginx -s reload || true
+  fi
 fi
 
 module_G_ensure_nginx_run_user() {

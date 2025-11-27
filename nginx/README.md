@@ -6,6 +6,12 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/nginx/15-modsecurity-nginx.sh)"
 ```
 
+**cd** **/home/nginx\_build\_geoip2**   **# 依你實際位置**
+cd** **nginx**                      **# 對應 d:\\app\\docker-operation\\nginx
+chmod** **+x** **check-build-nginx.sh** **# 第一次需要
+./check-build-nginx.sh**        **# 預設檢查 build-nginx.sh
+
+
 就現在這支 [build-nginx.sh](cci:7://file:///d:/app/docker-operation/nginx/build-nginx.sh:0:0-0:0)，實際會用到/產生的「重點目錄」整理給你，方便你確認生態系：
 
 ### 1. 編譯用工作目錄
@@ -26,6 +32,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
 ### 2. Nginx 安裝與設定目錄
 
 - **`$NGINX_ETC`**（腳本裡預設 `/etc/nginx`）
+
   - `$NGINX_ETC/nginx.conf`
   - `$NGINX_ETC/conf.d/`
   - `$NGINX_ETC/sites-available/`
@@ -34,11 +41,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
   - `$NGINX_ETC/modules/`        → `00-load-modules.conf`
   - `$NGINX_ETC/ssl/`            → 700 權限的憑證目錄
   - `$NGINX_ETC/scripts/`        → 放自訂 sh 腳本的目錄
-
 - **模組實體檔**
-  - `/usr/lib/nginx/modules/`    → `*.so`（geoip2、brotli、headers-more、cache_purge、njs、image_filter…）
 
+  - `/usr/lib/nginx/modules/`    → `*.so`（geoip2、brotli、headers-more、cache_purge、njs、image_filter…）
 - **執行檔 / pid / log**
+
   - `/usr/sbin/nginx`
   - `/run/nginx.pid`
   - `/run/nginx.lock`
