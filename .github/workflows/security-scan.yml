@@ -30,7 +30,9 @@ jobs:
         output: 'trivy-results.sarif'
 
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
+      # 避免 fork PR 上因權限不足導致失敗
+      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: 'trivy-results.sarif'
 
@@ -121,6 +123,8 @@ jobs:
         output: 'docker-security-results.sarif'
 
     - name: Upload Docker security results
-      uses: github/codeql-action/upload-sarif@v3
+      # 避免 fork PR 上因權限不足導致失敗
+      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: 'docker-security-results.sarif'
