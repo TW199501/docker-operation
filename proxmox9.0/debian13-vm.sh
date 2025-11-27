@@ -232,6 +232,26 @@ function default_settings() {
     echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}no${CL}"
     INSTALL_DOCKER="no"
   fi
+
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}yes${CL}"
+    INSTALL_NODE_EXPORTER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}no${CL}"
+    INSTALL_NODE_EXPORTER="no"
+  fi
+
+  # Set Cloud-Init defaults
+  CI_USER="debian"
+  CI_PASSWORD="debian"
+  CI_IP_CONFIG="ip=dhcp"
+  CI_NAMESERVER="8.8.8.8 1.1.1.1"
+  CI_SSHKEY=""
+  CONFIGURE_CLOUDINIT="yes"
+  echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init User: ${BGN}debian${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Password: ${BGN}debian${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Network: ${BGN}DHCP${CL}"
+  msg_info "⚠️  Default password is 'debian' - Please change after first login!"
 }
 
 function advanced_settings() {
@@ -409,12 +429,114 @@ function advanced_settings() {
     INSTALL_DOCKER="no"
   fi
 
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}yes${CL}"
+    INSTALL_NODE_EXPORTER="yes"
+  else
+    echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}no${CL}"
+    INSTALL_NODE_EXPORTER="no"
+  fi
+
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
     echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
     START_VM="yes"
   else
     echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}no${CL}"
     START_VM="no"
+  fi
+
+  # Cloud-Init Configuration
+  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT CONFIGURATION" --yesno "Configure Cloud-Init (user, password, network)?" 10 58); then
+    # Username
+    if CI_USER=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Cloud-Init username" 8 58 debian --title "CLOUD-INIT USER" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -z "$CI_USER" ]; then
+        CI_USER="debian"
+      fi
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init User: ${BGN}$CI_USER${CL}"
+    else
+      CI_USER="debian"
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init User: ${BGN}$CI_USER (default)${CL}"
+    fi
+
+    # Password
+    if CI_PASSWORD=$(whiptail --backtitle "Proxmox VE Helper Scripts" --passwordbox "Set Cloud-Init password" 8 58 --title "CLOUD-INIT PASSWORD" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -z "$CI_PASSWORD" ]; then
+        CI_PASSWORD="debian"
+      fi
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Password: ${BGN}***${CL}"
+    else
+      CI_PASSWORD="debian"
+      echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init Password: ${BGN}*** (default)${CL}"
+    fi
+
+    # Network Configuration
+    if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "NETWORK CONFIG" --yesno "Use DHCP for network configuration?" --defaultno 10 58); then
+      CI_IP_CONFIG="ip=dhcp"
+      echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP${CL}"
+    else
+      # Static IP
+      if CI_IP=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set static IP address (e.g., 192.168.1.100/24)" 8 58 --title "STATIC IP" --cancel-button Skip 3>&1 1>&2 2>&3); then
+        if [ -n "$CI_IP" ]; then
+          # Gateway
+          if CI_GW=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set gateway address" 8 58 --title "GATEWAY" --cancel-button Skip 3>&1 1>&2 2>&3); then
+            if [ -n "$CI_GW" ]; then
+              CI_IP_CONFIG="ip=${CI_IP},gw=${CI_GW}"
+              echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP, Gateway: $CI_GW${CL}"
+            else
+              CI_IP_CONFIG="ip=${CI_IP}"
+              echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP${CL}"
+            fi
+          else
+            CI_IP_CONFIG="ip=${CI_IP}"
+            echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP${CL}"
+          fi
+        else
+          CI_IP_CONFIG="ip=dhcp"
+          echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP (fallback)${CL}"
+        fi
+      else
+        CI_IP_CONFIG="ip=dhcp"
+        echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP (fallback)${CL}"
+      fi
+    fi
+
+    # DNS Configuration
+    if CI_DNS=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set DNS nameservers (space-separated, e.g., 8.8.8.8 1.1.1.1)" 8 58 "8.8.8.8 1.1.1.1" --title "DNS SERVERS" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -n "$CI_DNS" ]; then
+        CI_NAMESERVER="$CI_DNS"
+        echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}$CI_DNS${CL}"
+      else
+        CI_NAMESERVER="8.8.8.8 1.1.1.1"
+        echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}8.8.8.8 1.1.1.1 (default)${CL}"
+      fi
+    else
+      CI_NAMESERVER="8.8.8.8 1.1.1.1"
+      echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}8.8.8.8 1.1.1.1 (default)${CL}"
+    fi
+
+    # SSH Public Key (optional)
+    if CI_SSHKEY=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Paste SSH public key (optional, leave blank to skip)" 10 58 --title "SSH PUBLIC KEY" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if [ -n "$CI_SSHKEY" ]; then
+        echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Configured${CL}"
+      else
+        CI_SSHKEY=""
+        echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Not configured${CL}"
+      fi
+    else
+      CI_SSHKEY=""
+      echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Not configured${CL}"
+    fi
+
+    CONFIGURE_CLOUDINIT="yes"
+  else
+    # Use defaults
+    CI_USER="debian"
+    CI_PASSWORD="debian"
+    CI_IP_CONFIG="ip=dhcp"
+    CI_NAMESERVER="8.8.8.8 1.1.1.1"
+    CI_SSHKEY=""
+    CONFIGURE_CLOUDINIT="yes"
+    echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init: ${BGN}Using defaults (debian/debian, DHCP)${CL}"
   fi
 
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Debian 13 VM?" --no-button Do-Over 10 58); then
@@ -445,6 +567,7 @@ start_script
 #post_to_api_vm
 
 msg_info "Validating Storage"
+# Suppress errors from unavailable storage backends (e.g., offline PBS)
 while read -r line; do
   TAG=$(echo $line | awk '{print $1}')
   TYPE=$(echo $line | awk '{printf "%-10s", $2}')
@@ -455,9 +578,16 @@ while read -r line; do
     MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
   fi
   STORAGE_MENU+=("$TAG" "$ITEM" "OFF")
-done < <(pvesm status -content images | awk 'NR>1')
-VALID=$(pvesm status -content images | awk 'NR>1')
-if [ -z "$VALID" ]; then
+done < <(pvesm status -content images 2>/dev/null | awk 'NR>1')
+VALID=$(pvesm status -content images 2>/dev/null | awk 'NR>1')
+
+# Check if any storage backends failed to connect
+if pvesm status -content images 2>&1 | grep -qi "error\|can't connect\|connection refused"; then
+  echo -e "${YW}ℹ️  Note: Some storage backends are currently unavailable (this won't affect VM creation)${CL}"
+fi
+
+# Validate that we have at least one available storage
+if [ ${#STORAGE_MENU[@]} -eq 0 ]; then
   msg_error "Unable to detect a valid storage location."
   exit
 elif [ $((${#STORAGE_MENU[@]} / 3)) -eq 1 ]; then
@@ -476,10 +606,30 @@ msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
 URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
-curl -f#SL -o "$(basename "$URL")" "$URL"
-echo -en "\e[1A\e[0K"
-FILE=$(basename $URL)
-msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
+
+# Download the image with error handling
+FILE=$(basename "$URL")
+msg_info "Downloading to: $(pwd)/$FILE"
+
+if curl -f#SL -o "$FILE" "$URL"; then
+  echo -en "\e[1A\e[0K"
+  
+  # Verify the downloaded file
+  if [ -f "$FILE" ] && [ -s "$FILE" ]; then
+    FILE_SIZE=$(du -h "$FILE" | cut -f1)
+    msg_ok "Downloaded ${CL}${BL}${FILE}${CL} (${FILE_SIZE})"
+  else
+    msg_error "Download completed but file is missing or empty"
+    msg_error "Expected file: $(pwd)/$FILE"
+    ls -lh "$(pwd)" 2>/dev/null || true
+    exit 1
+  fi
+else
+  msg_error "Failed to download Debian 13 image"
+  msg_error "URL: ${URL}"
+  msg_error "Please check your internet connection and try again"
+  exit 1
+fi
 
 STORAGE_TYPE=$(pvesm status -storage "$STORAGE" | awk 'NR>1 {print $2}')
 case $STORAGE_TYPE in
@@ -520,15 +670,23 @@ lvm | lvm-thin)
   FORMAT=",efitype=4m"
   THIN=""
   ;;
+rbd)
+  DISK_EXT=""
+  DISK_REF=""
+  DISK_IMPORT="-format raw"
+  FORMAT=",efitype=4m"
+  THIN=""
+  msg_info "檢測到 Ceph RBD 儲存類型，應用 RBD 優化設置..."
+  ;;
 *)
   msg_error "不支持的儲存類型: $STORAGE_TYPE"
-  msg_error "支持: nfs, dir, btrfs, zfs, zfspool, lvm, lvm-thin"
+  msg_error "支持: nfs, dir, btrfs, zfs, zfspool, lvm, lvm-thin, rbd"
   exit 1
   ;;
 esac
 for i in {0,1}; do
   disk="DISK$i"
-  if [[ "$STORAGE_TYPE" == "zfspool" ]]; then
+  if [[ "$STORAGE_TYPE" == "zfspool" ]] || [[ "$STORAGE_TYPE" == "rbd" ]]; then
     # ZFSPool uses different naming convention
     eval DISK${i}=vm-${VMID}-disk-${i}
     eval DISK${i}_REF=${STORAGE}:${!disk}
@@ -554,29 +712,65 @@ export https_proxy="${https_proxy:-}"
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
   msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
 else
-  msg_info "Adding QEMU Guest Agent to Debian 13 Qcow2 Disk Image"
-  # Try to install qemu-guest-agent with retry logic for network issues
-  if virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null 2>&1; then
+  msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
+  # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
+  if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init >/dev/null 2>&1; then
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-    msg_ok "Added QEMU Guest Agent to Debian 13 Qcow2 Disk Image successfully"
+    msg_ok "Added QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image successfully"
   else
-    msg_error "Failed to install qemu-guest-agent due to network issues. Continuing without it..."
-    # Skip qemu-guest-agent installation but continue with other customizations
+    msg_error "Failed to install packages due to network issues. Continuing..."
+    # Skip installation but continue with other customizations
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null 2>&1 &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null 2>&1
-    msg_ok "VM image customized (without qemu-guest-agent)"
+    msg_ok "VM image customized (without additional packages)"
   fi
+fi
+
+# Install Node Exporter if requested
+if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
+  msg_info "Adding Prometheus Node Exporter to Debian 13 Qcow2 Disk Image"
+  
+  # Download and install Node Exporter
+  virt-customize -q -a "${FILE}" --run-command "useradd --no-create-home --shell /bin/false node_exporter" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "curl -fsSL https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -o /tmp/node_exporter.tar.gz" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "tar -xzf /tmp/node_exporter.tar.gz -C /tmp && mv /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/ && rm -rf /tmp/node_exporter*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "chown node_exporter:node_exporter /usr/local/bin/node_exporter" >/dev/null
+  
+  # Create systemd service file
+  virt-customize -q -a "${FILE}" --run-command "cat > /etc/systemd/system/node_exporter.service << 'EOF'
+[Unit]
+Description=Prometheus Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+EOF" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "systemctl enable node_exporter" >/dev/null
+  
+  msg_ok "Added Prometheus Node Exporter to Debian 13 Qcow2 Disk Image successfully"
+  msg_info "Node Exporter will be available on port 9100"
 fi
 
 # msg_info "Expanding root partition to use full disk space"
@@ -604,6 +798,11 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
 else
   VM_TAG="debian13"
 fi
+
+# Add node-exporter tag if installed
+if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
+  VM_TAG="${VM_TAG};node-exporter"
+fi
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags $VM_TAG -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
@@ -613,13 +812,37 @@ qm set $VMID \
   -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
-# qm resize $VMID scsi0 8G >/dev/null
-# 若仍想保留 resize 動作，請用你選的 DISK_SIZE（或乾脆刪掉這行）
 qm resize $VMID scsi0 "$DISK_SIZE" >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
-# qm set $VMID --agent enabled=1 >/dev/null
-# 讓 PVE 的 Cloud-Init 設定生效（之後可在 GUI 的 Cloud-Init 分頁填 user/ssh/ipconfig0）
+# 讓 PVE 的 Cloud-Init 設定生效
 qm set $VMID --ide2 $STORAGE:cloudinit
+
+# Configure Cloud-Init with user settings
+msg_info "Configuring Cloud-Init..."
+qm set $VMID --ciuser "${CI_USER:-debian}" >/dev/null
+qm set $VMID --cipassword "${CI_PASSWORD:-debian}" >/dev/null
+qm set $VMID --ipconfig0 "${CI_IP_CONFIG:-ip=dhcp}" >/dev/null
+
+# Set DNS nameservers if configured
+if [ -n "${CI_NAMESERVER:-}" ]; then
+  qm set $VMID --nameserver "${CI_NAMESERVER}" >/dev/null
+fi
+
+# Set SSH public key if provided
+if [ -n "${CI_SSHKEY:-}" ]; then
+  # URL encode the SSH key for Proxmox
+  ENCODED_KEY=$(echo -n "${CI_SSHKEY}" | jq -sRr @uri 2>/dev/null || echo -n "${CI_SSHKEY}")
+  qm set $VMID --sshkeys "$ENCODED_KEY" >/dev/null
+  # Ensure password authentication is still enabled
+  qm set $VMID --cipassword "${CI_PASSWORD:-debian}" >/dev/null
+  msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP}, SSH Key: Yes, Password: Enabled)"
+else
+  msg_ok "Cloud-Init configured (User: ${CI_USER:-debian}, Network: ${CI_IP_CONFIG:-DHCP})"
+fi
+
+if [ "${CI_PASSWORD:-debian}" == "debian" ]; then
+  msg_info "⚠️  Using default password 'debian' - Please change after first login!"
+fi
 
 DESCRIPTION=$(
   cat <<EOF
@@ -635,6 +858,15 @@ if [ "$START_VM" == "yes" ]; then
   msg_info "Starting Debian 13 VM"
   qm start $VMID
   msg_ok "Started Debian 13 VM"
+  echo ""
+  msg_info "⏳ Please wait 2-3 minutes for Cloud-Init to complete initialization"
+  msg_info "📋 Login credentials:"
+  msg_info "   User: ${CI_USER:-debian}"
+  msg_info "   Password: ${CI_PASSWORD:-debian}"
+  msg_info "   Network: ${CI_IP_CONFIG:-DHCP}"
+  echo ""
+  msg_info "💡 To check Cloud-Init status, use Proxmox Console and run:"
+  msg_info "   cloud-init status --wait"
 fi
 ## post_update_to_api "done" "none"
 msg_ok "Completed Successfully!"
