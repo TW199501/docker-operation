@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  elf-nginx:
+    container_name: elf-nginx
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    image: elf-nginx:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./volumes/nginx/etc:/etc/nginx
+      - ./volumes/nginx/modules:/usr/lib/nginx/modules
+      - ./volumes/nginx/logs:/var/log/nginx
+      - ./volumes/nginx/cache:/var/cache/nginx
+      - ./volumes/nginx/geoip:/usr/share/GeoIP
+      - ./volumes/nginx/keepalived:/etc/keepalived
+    environment:
+      - KEEPALIVED_CONF=/etc/keepalived/keepalived.conf

@@ -26,6 +26,7 @@ CONF="/etc/keepalived/keepalived.conf"
 VRRP_PASS="23887711"   # 固定 8 碼
 OPEN_HTTP="${OPEN_HTTP:-no}"    # yes=順便放行 80
 OPEN_HTTPS="${OPEN_HTTPS:-no}"  # yes=順便放行 443
+SKIP_KEEPALIVED_CONF="${SKIP_KEEPALIVED_CONF:-0}"
 
 need_pkg() {
   command -v "$1" >/dev/null 2>&1 || return 0
@@ -124,9 +125,15 @@ cd "$BUILD_DIR"
 make -j"$(nproc)"
 make install
 
+if [ "$SKIP_KEEPALIVED_CONF" -eq 1 ]; then
+  msg "SKIP_KEEPALIVED_CONF=1，僅編譯安裝 keepalived，略過後續配置"
+  exit 0
+fi
+
 # 以我們安裝的 keepalived 為主，確保 systemd 使用 /usr/sbin/keepalived
-if [ ! -f "$SYSTEMD_UNIT" ]; then
-  cat > "$SYSTEMD_UNIT" <<'UNIT'
+if command -v systemctl >/dev/null 2>&1; then
+  if [ ! -f "$SYSTEMD_UNIT" ]; then
+    cat > "$SYSTEMD_UNIT" <<'UNIT'
 [Unit]
 Description=LVS and VRRP High Availability Monitor
 After=network-online.target
@@ -144,6 +151,9 @@ RestartSec=2s
 [Install]
 WantedBy=multi-user.target
 UNIT
+  fi
+else
+  warn "systemctl 不存在，略過建立 keepalived.service"
 fi
 
 msg "[3/6] 建立 Nginx 健康檢查腳本"
@@ -245,11 +255,15 @@ if command -v ufw >/dev/null 2>&1; then
   ufw reload || true
 fi
 
-msg "[6/6] 啟動 keepalived"
-systemctl daemon-reload
-systemctl enable --now keepalived
-sleep 1
-systemctl --no-pager --full status keepalived || true
+if command -v systemctl >/dev/null 2>&1; then
+  msg "[6/6] 啟動 keepalived"
+  systemctl daemon-reload
+  systemctl enable --now keepalived
+  sleep 1
+  systemctl --no-pager --full status keepalived || true
+else
+  warn "systemctl 不存在，略過自動啟動 keepalived（請自行以 keepalived -n -f 啟動）"
+fi
 
 echo
 echo "================= 摘要 ================="
