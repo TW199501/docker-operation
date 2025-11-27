@@ -9,6 +9,46 @@ set -euo pipefail
 
 # ===== 全域預設變數（可被環境變數覆蓋，確保在 module_A 之前就有值）=====
 BUILD_DIR=${BUILD_DIR:-/home/nginx_build_geoip2}
+
+install_nginx_systemd_service() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo ">> 此系統無 systemd，略過 nginx.service 建立"
+    return
+  fi
+
+  local SERVICE_FILE=/etc/systemd/system/nginx.service
+  if [ ! -f "$SERVICE_FILE" ]; then
+    echo ">> 建立 /etc/systemd/system/nginx.service"
+    $SUDO tee "$SERVICE_FILE" >/dev/null <<'UNIT'
+[Unit]
+Description=nginx - high performance web server
+Documentation=man:nginx(8)
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+PIDFile=/run/nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'
+ExecStart=/usr/sbin/nginx -g 'daemon on; master_process on;'
+ExecReload=/usr/sbin/nginx -g 'daemon on; master_process on;' -s reload
+ExecStop=/usr/sbin/nginx -s quit
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  else
+    echo ">> 偵測到既有 nginx.service，略過覆寫"
+  fi
+
+  echo ">> 重新載入 systemd 並啟動 nginx"
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable nginx >/dev/null 2>&1 || true
+  if ! $SUDO systemctl restart nginx; then
+    $SUDO systemctl start nginx || true
+  fi
+  $SUDO systemctl status nginx --no-pager || true
+}
 NGINX_VERSION=${NGINX_VERSION:-1.29.3}
 LAN_CIDR=${LAN_CIDR:-"192.168.25.0/24"}
 NGINX_ETC=${NGINX_ETC:-/etc/nginx}
@@ -882,6 +922,7 @@ module_D_build_nginx_and_base_init
 module_E_geoip_cloudflare_init
 module_F_update_geoip_install_and_timer
 module_H_build_modsecurity_waf
+install_nginx_systemd_service
 
 # ===== 首次更新、驗證 =====
 echo ">> 先啟動 Nginx（若尚未啟動）"
