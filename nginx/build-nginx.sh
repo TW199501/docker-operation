@@ -389,27 +389,41 @@ allow all;
 #deny 198.51.100.0/24;
 BL
 fi
+
+  # ===== 確認 Nginx binary 與語法正常，否則中止後續 GeoIP/更新腳本安裝 =====
+  echo ">> 初次檢查 nginx 版本與語法"
+  if ! command -v nginx >/dev/null 2>&1; then
+    echo "錯誤：找不到 nginx 指令（安裝可能失敗），中止後續 GeoIP 安裝" >&2
+    exit 1
+  fi
+
+  if ! $SUDO nginx -v >/dev/null 2>&1; then
+    echo "錯誤：nginx -v 失敗，中止後續 GeoIP 安裝" >&2
+    exit 1
+  fi
+
+  if ! $SUDO nginx -t; then
+    echo "錯誤：nginx -t 失敗，中止後續 GeoIP 安裝" >&2
+    exit 1
+  fi
 }
 
 module_E_geoip_cloudflare_init() {
-  # 驗證（跳過 IPv6 相關錯誤）— 已停用 nginx -t
-  # $SUDO nginx -t || echo "警告：nginx -t 測試失敗，可能是因為 IPv6 配置問題。這在 IPv6 被禁用的系統上是正常的。"
+  # GeoIP2 mmdb
+echo ">> 安裝 GeoIP2 mmdb"
 
-  # ===== GeoIP2 mmdb =====
-  echo ">> 安裝 GeoIP2 mmdb"
+COUNTRY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
+CITY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
+ASN_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
+CF_V4_URL="https://www.cloudflare.com/ips-v4"
+CF_V6_URL="https://www.cloudflare.com/ips-v6"
 
-  COUNTRY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
-  CITY_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
-  ASN_URL="https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
-  CF_V4_URL="https://www.cloudflare.com/ips-v4"
-  CF_V6_URL="https://www.cloudflare.com/ips-v6"
+$SUDO mkdir -p /etc/nginx/geoip
+$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-ASN.mmdb     "$ASN_URL"
+$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-City.mmdb    "$CITY_URL"
+$SUDO wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "$COUNTRY_URL"
 
-  $SUDO mkdir -p /etc/nginx/geoip
-  $SUDO wget -q -O /etc/nginx/geoip/GeoLite2-ASN.mmdb     "$ASN_URL"
-  $SUDO wget -q -O /etc/nginx/geoip/GeoLite2-City.mmdb    "$CITY_URL"
-  $SUDO wget -q -O /etc/nginx/geoip/GeoLite2-Country.mmdb "$COUNTRY_URL"
-
-  # Cloudflare IP初始化
+# Cloudflare IP初始化
   echo ">> 初始化 Cloudflare real_ip 與 conf.d/cloudflare.conf"
   $SUDO mkdir -p /etc/nginx/conf.d
   $SUDO install -d -m 0755 /etc/nginx/sites-available /etc/nginx/sites-enabled
@@ -420,7 +434,7 @@ module_E_geoip_cloudflare_init() {
   $SUDO install -m0644 "$TMP_CF/cloudflare_v4_realip.conf" /etc/nginx/geoip/cloudflare_v4_realip.conf
   $SUDO install -m0644 "$TMP_CF/cloudflare_v6_realip.conf" /etc/nginx/geoip/cloudflare_v6_realip.conf
 
-  $SUDO tee /etc/nginx/conf.d/cloudflare.conf >/dev/null << 'NG'
+$SUDO tee /etc/nginx/conf.d/cloudflare.conf >/dev/null << 'NG'
 
 # Cloudflare / cloudflared real_ip & GeoIP2
 include /etc/nginx/geoip/cloudflare_v4_realip.conf;
@@ -435,23 +449,23 @@ real_ip_recursive on;
 # GeoIP2
 geoip2_proxy_recursive on;
 geoip2 /etc/nginx/geoip/GeoLite2-Country.mmdb {
-    auto_reload 5m;
-    $geoip2_metadata_country_build metadata build_epoch;
-    $geoip2_data_country_code source=$remote_addr country iso_code;
-    $geoip2_data_country_name country names en;
+auto_reload 5m;
+$geoip2_metadata_country_build metadata build_epoch;
+$geoip2_data_country_code source=$remote_addr country iso_code;
+$geoip2_data_country_name country names en;
 }
 geoip2 /etc/nginx/geoip/GeoLite2-City.mmdb {
-    $geoip2_data_city_name city names en;
-    $geoip2_data_city_longitude location longitude;
-    $geoip2_data_city_latitude location latitude;
+$geoip2_data_city_name city names en;
+$geoip2_data_city_longitude location longitude;
+$geoip2_data_city_latitude location latitude;
 }
 NG
 }
 
 module_F_update_geoip_install_and_timer() {
   # 更新Geoip與Cloudflrae IP
-  echo ">> 寫入 /etc/nginx/scripts/update_geoip.sh 每周三 六 03:00 跑"
-  $SUDO tee /etc/nginx/scripts/update_geoip.sh >/dev/null <<'UPD'
+echo ">> 寫入 /etc/nginx/scripts/update_geoip.sh 每周三 六 03:00 跑"
+$SUDO tee /etc/nginx/scripts/update_geoip.sh >/dev/null <<'UPD'
 #!/usr/bin/env bash
 set -euo pipefail
 GEOIP_DIR="/etc/nginx/geoip"
@@ -495,17 +509,18 @@ UPD
 
 $SUDO chmod +x /etc/nginx/scripts/update_geoip.sh
 
-# ===== 安排排程（systemd 優先，否則 cron.d，再否則 crontabs/root） =====
+# 安排排程（systemd 優先，否則 /etc/cron.d，再否則 crontabs/root）
 if command -v systemctl >/dev/null 2>&1; then
-    echo ">> 使用 systemd timer 安排排程"
-    $SUDO tee /etc/systemd/system/update-geoip.service >/dev/null <<'UNIT'
+  echo ">> 使用 systemd timer 安排排程"
+  $SUDO tee /etc/systemd/system/update-geoip.service >/dev/null <<'UNIT'
 [Unit]
 Description=Update GeoIP2 DB & Cloudflare real_ip lists (nginx reload)
 [Service]
 Type=oneshot
 ExecStart=/etc/nginx/scripts/update_geoip.sh
 UNIT
-    $SUDO tee /etc/systemd/system/update-geoip.timer >/dev/null <<'UNIT'
+
+$SUDO tee /etc/systemd/system/update-geoip.timer >/dev/null <<'UNIT'
 [Unit]
 Description=Run update_geoip twice weekly at 03:00
 [Timer]
@@ -515,24 +530,24 @@ RandomizedDelaySec=5min
 [Install]
 WantedBy=timers.target
 UNIT
-    $SUDO systemctl daemon-reload
-    $SUDO systemctl enable --now update-geoip.timer
-    systemctl list-timers | grep update-geoip || true
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable --now update-geoip.timer
+  systemctl list-timers | grep update-geoip || true
 elif [ -d /etc/cron.d ]; then
-    echo ">> 使用 /etc/cron.d 安排排程"
-    echo '0 3 * * 3,6 root /etc/nginx/scripts/update_geoip.sh >/var/log/update_geoip.log 2>&1' | $SUDO tee /etc/cron.d/update_geoip >/dev/null
-    $SUDO chmod 644 /etc/cron.d/update_geoip
-    $SUDO systemctl reload cron 2>/dev/null || $SUDO systemctl reload crond 2>/dev/null || \
-    $SUDO service cron reload 2>/dev/null || $SUDO service crond reload 2>/dev/null || true
-  else
-    echo ">> BusyBox/Alpine：寫入 /etc/crontabs/root"
-    $SUDO mkdir -p /etc/crontabs
-    $SUDO sed -i '\#update_geoip.sh#d' /etc/crontabs/root 2>/dev/null || true
-    echo '0 3 * * 3,6 /etc/nginx/scripts/update_geoip.sh >/var/log/update_geoip.log 2>&1' | $SUDO tee -a /etc/crontabs/root >/dev/null
-    $SUDO service crond restart 2>/dev/null || $SUDO rc-service crond restart 2>/dev/null || true
+  echo ">> 使用 /etc/cron.d 安排排程"
+  echo '0 3 * * 3,6 root /etc/nginx/scripts/update_geoip.sh >/var/log/update_geoip.log 2>&1' | $SUDO tee /etc/cron.d/update_geoip >/dev/null
+  $SUDO chmod 644 /etc/cron.d/update_geoip
+  $SUDO systemctl reload cron 2>/dev/null || $SUDO systemctl reload crond 2>/dev/null || \
+  $SUDO service cron reload 2>/dev/null || $SUDO service crond reload 2>/dev/null || true
+else
+  echo ">> BusyBox/Alpine：寫入 /etc/crontabs/root"
+  $SUDO mkdir -p /etc/crontabs
+  $SUDO sed -i '\#update_geoip.sh#d' /etc/crontabs/root 2>/dev/null || true
+  echo '0 3 * * 3,6 /etc/nginx/scripts/update_geoip.sh >/var/log/update_geoip.log 2>&1' | $SUDO tee -a /etc/crontabs/root >/dev/null
+  $SUDO service crond restart 2>/dev/null || $SUDO rc-service crond restart 2>/dev/null || true
 fi
-}
 
+# 4) 設定 IP 白名單管理
 # 創建 IP 管理腳本（集中在 /etc/nginx/scripts/manage_ip.sh）
 $SUDO mkdir -p /etc/nginx/scripts
 $SUDO tee /etc/nginx/scripts/manage_ip.sh >/dev/null <<'UPD'
@@ -622,9 +637,16 @@ module_G_ensure_nginx_run_user() {
     /var/cache/nginx/scgi_temp
 }
 
+module_A_interactive_and_params
+module_B_cleanup_and_stop_old_nginx
+module_C_source_and_deps
+module_D_build_nginx_and_base_init
+module_E_geoip_cloudflare_init
+module_F_update_geoip_install_and_timer
+
 # ===== 首次更新、驗證 =====
 echo ">> 先啟動 Nginx（若尚未啟動）"
-if ! pgrep -x nginx >/dev/null 2>&1; then
+if command -v nginx >/dev/null 2>&1 && ! pgrep -x nginx >/dev/null 2>&1; then
   if command -v systemctl >/dev/null 2>&1; then
     $SUDO systemctl start nginx 2>/dev/null || $SUDO nginx || \
       echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
@@ -637,10 +659,3 @@ fi
 if command -v apt-mark >/dev/null 2>&1; then
   $SUDO apt-mark hold nginx || true
 fi
-
-module_A_interactive_and_params
-module_B_cleanup_and_stop_old_nginx
-module_C_source_and_deps
-module_D_build_nginx_and_base_init
-module_E_geoip_cloudflare_init
-module_F_update_geoip_install_and_timer
