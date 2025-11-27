@@ -161,6 +161,14 @@
 "editor.inlineSuggest.enabled": false,
 "editor.acceptSuggestionOnCommitCharacter": false,
 "diffEditor.renderSideBySide": false,
-"editor.inlineSuggest.edits.allowCodeShifting": "never",
-"editor.inlineSuggest.edits.renderSideBySide": "never"
+"editor.inlineSuggest.edits.allowCodeShifting": "always",
+"editor.inlineSuggest.edits.renderSideBySide": "auto",
+"editor.acceptSuggestionOnEnter": "off",
+"editor.inlineSuggest.experimental.emptyResponseInformation": false,
+"editor.inlineSuggest.suppressInSnippetMode": false,
+"editor.inlineSuggest.syntaxHighlightingEnabled": false,
+"editor.inlineSuggest.triggerCommandOnProviderChange": false,
+"editor.quickSuggestions": {
+    "other": "off"
+}
 }

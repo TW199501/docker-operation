@@ -546,6 +546,7 @@ else
   echo '0 3 * * 3,6 /etc/nginx/scripts/update_geoip.sh >/var/log/update_geoip.log 2>&1' | $SUDO tee -a /etc/crontabs/root >/dev/null
   $SUDO service crond restart 2>/dev/null || $SUDO rc-service crond restart 2>/dev/null || true
 fi
+}
 
 # 4) 設定 IP 白名單管理
 # 創建 IP 管理腳本（集中在 /etc/nginx/scripts/manage_ip.sh）
@@ -664,3 +665,4 @@ fi
 echo ">> 完成！請手動檢查 /etc/nginx 配置，並重啟 Nginx"
 echo ">> 完成後可執行「nginx -t」驗證配置"
 echo ">> 完成後可執行「systemctl restart nginx」重啟 Nginx"
+echo ">> 完成後可執行「systemctl status nginx」檢查狀態"
