@@ -659,3 +659,8 @@ fi
 if command -v apt-mark >/dev/null 2>&1; then
   $SUDO apt-mark hold nginx || true
 fi
+
+
+echo ">> 完成！請手動檢查 /etc/nginx 配置，並重啟 Nginx"
+echo ">> 完成後可執行「nginx -t」驗證配置"
+echo ">> 完成後可執行「systemctl restart nginx」重啟 Nginx"
