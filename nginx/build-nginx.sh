@@ -313,8 +313,8 @@ MODULES=(
   ngx_http_headers_more_filter_module.so
   ngx_http_image_filter_module.so
   ngx_http_js_module.so
-  ngx_stream_module.so
   ngx_stream_geoip2_module.so
+  ngx_stream_js_module.so
 )
 
 # 重新生成模組設定（寫入 conf.d/modules.conf）
@@ -561,6 +561,228 @@ else
 fi
 }
 
+module_H_build_modsecurity_waf() {
+  echo "==> 開始第二階段：編譯與啟用 ModSecurity WAF"
+
+  local MODSEC_WORK NGX_MODULES_DIR MODSEC_DIR CONF_D_DIR
+  MODSEC_WORK="${BUILD_DIR}/modsec_build"
+  NGX_MODULES_DIR="/usr/lib/nginx/modules"
+  MODSEC_DIR="/etc/nginx/modsecurity"
+  CONF_D_DIR="/etc/nginx/conf.d"
+
+  echo "==> 準備建置目錄：$MODSEC_WORK"
+  rm -rf "$MODSEC_WORK"
+  mkdir -p "$MODSEC_WORK"
+
+  echo "==> 安裝/確認 libModSecurity v3 與必要套件"
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    $SUDO apt-get update -yq
+    $SUDO apt-get install -yq libmodsecurity3 libmodsecurity-dev modsecurity-crs git build-essential curl
+  elif command -v apk >/dev/null 2>&1; then
+    $SUDO apk add --no-cache modsecurity modsecurity-dev modsecurity-rules-owasp-crs git build-base curl
+  fi
+
+  if ! ldconfig -p 2>/dev/null | grep -qi 'libmodsecurity\.so'; then
+    echo "!! 找不到 libmodsecurity(libmodsecurity.so)。請確認 libmodsecurity 已安裝（含 -dev）。" >&2
+    return 1
+  fi
+
+  echo "==> 取得 ModSecurity-nginx 連接器 v1.0.4"
+  local MODSEC_NGX_VER MODSEC_NGX_DIR
+  MODSEC_NGX_VER="v1.0.4"
+  MODSEC_NGX_DIR="${MODSEC_WORK}/ModSecurity-nginx-${MODSEC_NGX_VER}"
+  curl -fL --retry 3 -o "${MODSEC_WORK}/ModSecurity-nginx-${MODSEC_NGX_VER}.tar.gz" \
+    "https://github.com/owasp-modsecurity/ModSecurity-nginx/releases/download/${MODSEC_NGX_VER}/ModSecurity-nginx-${MODSEC_NGX_VER}.tar.gz"
+  tar -xzf "${MODSEC_WORK}/ModSecurity-nginx-${MODSEC_NGX_VER}.tar.gz" -C "$MODSEC_WORK"
+
+  echo "==> 準備對應版本 Nginx 原始碼（用於編譯動態模組）"
+  local NGINX_VER NGX_SRC
+  NGINX_VER="$(nginx -v 2>&1 | sed -n 's/^nginx version: nginx\///p')"
+  if [ -z "$NGINX_VER" ]; then
+    echo "!! 無法取得 nginx 版本" >&2
+    return 1
+  fi
+
+  NGX_SRC="${BUILD_DIR}/nginx-${NGINX_VER}"
+  if [ ! -d "$NGX_SRC" ]; then
+    echo "!! 找不到對應版本原始碼目錄: $NGX_SRC" >&2
+    echo "   請先透過本腳本完成 Nginx 主程式編譯後再執行 WAF 階段。" >&2
+    return 1
+  fi
+
+  echo "==> 讀取目前 nginx 的 configure 參數"
+  local NGX_ARGS NGX_ARGS_CLEAN CONFIG_CMD
+  NGX_ARGS="$(nginx -V 2>&1 | sed -n 's/^.*configure arguments: //p')"
+  if [ -z "$NGX_ARGS" ]; then
+    echo "!! 無法取得 configure arguments" >&2
+    return 1
+  fi
+  NGX_ARGS_CLEAN="$(echo "$NGX_ARGS" \
+    | sed -E 's/--with-openssl=[^ ]+//g; s/--with-pcre=[^ ]+//g; s/--with-zlib=[^ ]+//g; s/[[:space:]]+/ /g')"
+
+  echo "==> 以目前參數重新 configure（僅建置 modules），加入 ModSecurity 連接器"
+  cd "$NGX_SRC"
+  make clean || true
+  CONFIG_CMD="./configure $NGX_ARGS_CLEAN --add-dynamic-module=\"${MODSEC_NGX_DIR}\""
+  echo "    執行：$CONFIG_CMD"
+  eval "$CONFIG_CMD"
+  make modules -j"$(nproc)"
+
+  echo "==> 安裝 ngx_http_modsecurity_module.so -> ${NGX_MODULES_DIR}"
+  $SUDO install -d -m 0755 "${NGX_MODULES_DIR}"
+  if [ -f "objs/ngx_http_modsecurity_module.so" ]; then
+    $SUDO install -m 0755 "objs/ngx_http_modsecurity_module.so" "${NGX_MODULES_DIR}/"
+  else
+    echo "!! 編譯失敗，找不到 objs/ngx_http_modsecurity_module.so" >&2
+    return 1
+  fi
+
+  echo "==> 佈署 ModSecurity 與 CRS 設定"
+  $SUDO install -d -m 0755 "$MODSEC_DIR"
+
+  local LOG_DIR AUDIT_LOG
+  LOG_DIR="/var/log/modsecurity"
+  AUDIT_LOG="$LOG_DIR/audit.log"
+  $SUDO install -d -m 0755 "$LOG_DIR"
+  $SUDO touch "$AUDIT_LOG"
+
+  local ACTIVE_CFG MPID CMD RUN_USER
+  ACTIVE_CFG="/etc/nginx/nginx.conf"
+  MPID=""
+  if command -v pgrep >/dev/null 2>&1; then
+    MPID="$(pgrep -f 'nginx: master process' | head -n1 || true)"
+  fi
+  [ -n "$MPID" ] || MPID="$(ps ax -o pid=,cmd= | awk '/nginx: master process/{print $1; exit}')"
+  if [ -n "${MPID:-}" ] && [ -r "/proc/$MPID/cmdline" ]; then
+    CMD="$(tr '\0' ' ' </proc/"$MPID"/cmdline)"
+    if grep -q -- ' -c ' <<<"$CMD"; then
+      ACTIVE_CFG="$(sed -n 's/.* -c \([^ ]\+\).*/\1/p' <<<"$CMD")"
+    fi
+  fi
+
+  RUN_USER="$(awk '/^\s*user\s+/{print $2}' "$ACTIVE_CFG" 2>/dev/null | tr -d ' ;' | head -n1 || true)"
+  [ -z "$RUN_USER" ] && RUN_USER="www-data"
+  $SUDO chown "$RUN_USER:$RUN_USER" "$AUDIT_LOG" 2>/dev/null || true
+  $SUDO install -d -m 0750 -o "$RUN_USER" -g "$RUN_USER" /var/cache/modsecurity
+
+  local CORE_CONF TEMPLATES FOUND_TEMPLATE
+  CORE_CONF="$MODSEC_DIR/modsecurity.conf"
+  TEMPLATES=(
+    /etc/modsecurity/modsecurity.conf-recommended
+    /usr/local/etc/modsecurity.conf-recommended
+    /usr/share/modsecurity-crs/modsecurity.conf-recommended
+    /usr/share/doc/modsecurity-crs/examples/modsecurity.conf-recommended
+  )
+  FOUND_TEMPLATE=""
+  for t in "${TEMPLATES[@]}"; do
+    [ -f "$t" ] && { FOUND_TEMPLATE="$t"; break; }
+  done
+
+  if [ -n "$FOUND_TEMPLATE" ]; then
+    echo "   - 使用樣板：$FOUND_TEMPLATE"
+    $SUDO cp -f "$FOUND_TEMPLATE" "$CORE_CONF"
+    $SUDO sed -i 's/^\s*SecRuleEngine\s\+.*/SecRuleEngine On/' "$CORE_CONF"
+  else
+    echo "   - 找不到樣板，寫入最小可用設定（fallback）"
+    $SUDO tee "$CORE_CONF" >/dev/null <<'CONF'
+SecRuleEngine On
+SecRequestBodyAccess On
+SecResponseBodyAccess Off
+SecTmpDir /tmp
+SecDataDir /var/cache/modsecurity
+SecAuditEngine RelevantOnly
+SecAuditLog /var/log/modsecurity/audit.log
+SecAuditLogFormat JSON
+SecAuditLogType Serial
+SecAuditLogParts ABCEFHKZ
+SecArgumentSeparator &
+SecResponseBodyLimit 524288
+SecRequestBodyLimit 268435456
+SecRequestBodyNoFilesLimit 131072
+SecPcreMatchLimit 100000
+SecPcreMatchLimitRecursion 100000
+CONF
+  fi
+
+  local CRS_DIR
+  CRS_DIR=""
+  for d in /usr/share/modsecurity-crs /etc/modsecurity/crs /usr/local/share/modsecurity-crs; do
+    if [ -d "$d" ]; then CRS_DIR="$d"; break; fi
+  done
+
+  if [ -n "$CRS_DIR" ]; then
+    echo "   - 偵測到 CRS: $CRS_DIR"
+    $SUDO ln -sfn "$CRS_DIR" "$MODSEC_DIR/crs"
+    if [ -f "$MODSEC_DIR/crs/crs-setup.conf.example" ] && [ ! -f "$MODSEC_DIR/crs/crs-setup.conf" ]; then
+      $SUDO cp "$MODSEC_DIR/crs/crs-setup.conf.example" "$MODSEC_DIR/crs/crs-setup.conf"
+    fi
+    [ -f "$MODSEC_DIR/crs/crs-setup.conf" ] || echo "# minimal CRS setup" | $SUDO tee "$MODSEC_DIR/crs/crs-setup.conf" >/dev/null
+    if [ ! -d "$MODSEC_DIR/crs/rules" ]; then
+      echo "⚠️  未發現 $MODSEC_DIR/crs/rules，請確認 modsecurity-crs 是否完整安裝" >&2
+    fi
+  else
+    echo "   - 未找到 CRS（之後可安裝 modsecurity-crs 套件再重載）"
+  fi
+
+  local MAIN_CONF
+  MAIN_CONF="$MODSEC_DIR/main.conf"
+  {
+    echo "Include $CORE_CONF"
+    if [ -n "$CRS_DIR" ]; then
+      echo "Include $MODSEC_DIR/crs/crs-setup.conf"
+      echo "Include $MODSEC_DIR/crs/rules/*.conf"
+    fi
+    echo "Include $MODSEC_DIR/local-exclusions.conf"
+  } | $SUDO tee "$MAIN_CONF" >/dev/null
+
+  $SUDO tee "$MODSEC_DIR/local-exclusions.conf" >/dev/null <<'EXC'
+# 範例：排除 192.168.0.0/16 的 920440 規則（請依需求調整/刪除）
+SecRule REMOTE_ADDR "@ipMatch 192.168.0.0/16" \
+    "id:400000,phase:2,nolog,pass,ctl:ruleRemoveById=920440"
+EXC
+
+  $SUDO install -d -m 0755 "$CONF_D_DIR"
+  $SUDO tee "$CONF_D_DIR/waf.conf" >/dev/null <<'NG'
+# 載入 ModSecurity 動態模組
+load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;
+
+# 啟用 ModSecurity (http 區塊）
+modsecurity on;
+modsecurity_rules_file /etc/nginx/modsecurity/main.conf;
+NG
+
+  echo "   - 主設定：$MAIN_CONF"
+  echo "   - 啟用片段：$CONF_D_DIR/waf.conf"
+
+  echo "==> 嘗試重載 Nginx（不執行 nginx -t）"
+  if [ -n "${MPID:-}" ] && [ -f "$ACTIVE_CFG" ]; then
+    if nginx -s reload; then
+      echo "[OK] 已透過目前 master 進程重載 nginx"
+    else
+      echo "[WARN] 透過 master 進程重載失敗，請手動檢查 nginx"
+    fi
+  else
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+      if systemctl reload nginx; then
+        echo "[OK] 已透過 systemctl reload nginx"
+      else
+        echo "[WARN] systemctl reload nginx 失敗，改用 nginx -s reload"
+        nginx -s reload || echo "[WARN] nginx -s reload 失敗，請手動檢查 nginx"
+      fi
+    else
+      nginx -s reload || nginx || echo "[WARN] nginx reload/start 失敗，請手動檢查 nginx 配置"
+    fi
+  fi
+
+  echo
+  echo "✅ 完成 ModSecurity v3 + CRS 啟用。"
+  echo "   - 模組：${NGX_MODULES_DIR}/ngx_http_modsecurity_module.so（已自動載入）"
+  echo "   - 核心設定：${CORE_CONF:-$MODSEC_DIR/modsecurity.conf}"
+  echo "   - CRS：${CRS_DIR:-未安裝（已跳過 Include）}"
+  echo "   - 包含檔：${MAIN_CONF}"
+}
+
 # 4) 設定 IP 白名單管理
 # 創建 IP 管理腳本（集中在 /etc/nginx/scripts/manage_ip.sh）
 $SUDO mkdir -p /etc/nginx/scripts
@@ -659,6 +881,7 @@ module_C_source_and_deps
 module_D_build_nginx_and_base_init
 module_E_geoip_cloudflare_init
 module_F_update_geoip_install_and_timer
+module_H_build_modsecurity_waf
 
 # ===== 首次更新、驗證 =====
 echo ">> 先啟動 Nginx（若尚未啟動）"
@@ -675,6 +898,8 @@ fi
 if command -v apt-mark >/dev/null 2>&1; then
   $SUDO apt-mark hold nginx || true
 fi
+
+
 
 
 echo ">> 完成！請手動檢查 /etc/nginx 配置，並重啟 Nginx"
