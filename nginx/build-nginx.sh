@@ -289,7 +289,7 @@ module_D_build_nginx_and_base_init() {
   --http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
   --http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \
   --http-scgi-temp-path=/var/cache/nginx/scgi_temp \
-  --user=www-data --group=www-data \
+  --user=nginx --group=nginx \
   --with-compat --with-file-aio --with-threads \
   --with-http_addition_module --with-http_auth_request_module \
   --with-http_dav_module --with-http_flv_module --with-http_gunzip_module \
@@ -492,18 +492,18 @@ $SUDO wget -q -O /usr/share/GeoIP/GeoLite2-Country.mmdb "$COUNTRY_URL"
 include /etc/nginx/geoip/cloudflare_v4_realip.conf;
 include /etc/nginx/geoip/cloudflare_v6_realip.conf;
 
-set_real_ip_from 172.20.0.0/16; # cloudflared 隧道 IP
-set_real_ip_from 127.0.0.1;
+#set_real_ip_from 172.20.0.0/16; # cloudflared 隧道 IP
+#set_real_ip_from 127.0.0.1;
 
-real_ip_header X-Forwarded-For;
-real_ip_recursive on;
+#real_ip_header X-Forwarded-For;
+#real_ip_recursive on;
 
 # GeoIP2
-geoip2_proxy_recursive on;
-geoip2 /usr/share/GeoIP/GeoLite2-Country.mmdb {
-auto_reload 5m;
-$geoip2_metadata_country_build metadata build_epoch;
-$geoip2_data_country_code source=$remote_addr country iso_code;
+#geoip2_proxy_recursive on;
+#geoip2 /usr/share/GeoIP/GeoLite2-Country.mmdb {
+#auto_reload 5m;
+#geoip2_metadata_country_build metadata build_epoch;
+#$geoip2_data_country_code source=$remote_addr country iso_code;
 $geoip2_data_country_name country names en;
 }
 geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb {
@@ -885,16 +885,11 @@ fi
 
 module_G_ensure_nginx_run_user() {
   local RUN_USER RUN_GROUP
-  if getent passwd www-data >/dev/null 2>&1; then
-    RUN_USER="www-data"
-    RUN_GROUP="www-data"
-  else
-    RUN_USER="nginx"
-    RUN_GROUP="nginx"
-    getent group nginx >/dev/null 2>&1 || $SUDO groupadd --system nginx
-    getent passwd nginx >/dev/null 2>&1 || $SUDO useradd --system --no-create-home \
-      --shell /usr/sbin/nologin --gid nginx --home-dir /nonexistent nginx
-  fi
+  RUN_USER="nginx"
+  RUN_GROUP="nginx"
+  getent group "$RUN_GROUP" >/dev/null 2>&1 || $SUDO groupadd --system "$RUN_GROUP"
+  getent passwd "$RUN_USER" >/dev/null 2>&1 || $SUDO useradd --system --no-create-home \
+    --shell /usr/sbin/nologin --gid "$RUN_GROUP" --home-dir /nonexistent "$RUN_USER"
 
   # 在主設定加入/修正 user 指令
   if grep -qE '^\s*user\s+' /etc/nginx/nginx.conf; then
