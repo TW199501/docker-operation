@@ -718,6 +718,8 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
   msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
@@ -725,6 +727,8 @@ else
   msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
   # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
   if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init >/dev/null 2>&1; then
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
     msg_ok "Added QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image successfully"
