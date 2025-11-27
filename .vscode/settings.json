@@ -1,6 +1,6 @@
 {
   // General Settings
-  "editor.fontFamily": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace",
+  "editor.fontFamily": "'Maple Mono', 'JetBrains Mono', 'Cascadia Code', 'Iosevka Term', monospace",
   "editor.fontLigatures": true,
   "editor.fontWeight": "normal",
   "mssql.maxRecentConnections": 5,
@@ -150,6 +150,25 @@
   "[shellscript]": {
     "editor.defaultFormatter": null  // 使用語言預設格式化工具，避免無效擴充套件
 },
-"editor.fontSize": 14,
-"editor.fontVariations": false
+"editor.fontSize": 15,
+"editor.fontVariations": false,
+"window.density.editorTabHeight": "compact",
+"workbench.editor.autoLockGroups": {
+    "default": true
+},
+"workbench.editor.alwaysShowEditorActions": true,
+"kiroAgent.configureMCP": "Disabled",
+"editor.inlineSuggest.enabled": false,
+"editor.acceptSuggestionOnCommitCharacter": false,
+"diffEditor.renderSideBySide": false,
+"editor.inlineSuggest.edits.allowCodeShifting": "always",
+"editor.inlineSuggest.edits.renderSideBySide": "auto",
+"editor.acceptSuggestionOnEnter": "off",
+"editor.inlineSuggest.experimental.emptyResponseInformation": false,
+"editor.inlineSuggest.suppressInSnippetMode": false,
+"editor.inlineSuggest.syntaxHighlightingEnabled": false,
+"editor.inlineSuggest.triggerCommandOnProviderChange": false,
+"editor.quickSuggestions": {
+    "other": "off"
+}
 }

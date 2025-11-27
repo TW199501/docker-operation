@@ -1,7 +1,7 @@
 services:
-    cloudflare-tunnel:
+    cloudflare:
         image: cloudflare/cloudflared:latest
-        container_name: cloudflare-tunnel
+        container_name: cloudflare
         restart: unless-stopped
         #command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
         command: tunnel --no-autoupdate --protocol http2 run --token ${CLOUDFLARE_TUNNEL_TOKEN} #改用此段強制走HTTP2不走QUIC協定穩定度較佳

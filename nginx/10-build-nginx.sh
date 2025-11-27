@@ -24,10 +24,94 @@ fi
 BUILD_DIR="${BUILD_DIR:-/home/nginx_build_geoip2}"
 NGINX_VERSION="${NGINX_VERSION:-1.29.3}" # Nginx 版本
 LAN_CIDR="${LAN_CIDR:-192.168.25.0/24}"  # 本機介面 IPv4
-
 UFW_BASELINE="${UFW_BASELINE:-yes}"   # yes: 套用基礎 UFW（80/443 對外、22/8080 僅內網）
 UFW_SSH_LIMIT="${UFW_SSH_LIMIT:-no}"  # yes: 把內網 SSH 規則改限速
 UFW_SYNC_DEFAULT="${UFW_SYNC:-0}"     # 0: update 腳本不動 UFW；1: 會同步 CF 白名單（80/443）
+
+# ===== 顯示配置並確認 =====
+echo "=========================================="
+echo "  Nginx 編譯配置"
+echo "=========================================="
+echo "Nginx 版本：    $NGINX_VERSION"
+echo "OpenSSL 版本：  3.5.4"
+echo "PCRE2 版本：    10.44"
+echo "建置目錄：      $BUILD_DIR"
+echo "內網 CIDR：     $LAN_CIDR"
+echo "=========================================="
+echo ""
+
+# 詢問是否安裝/配置防火牆
+if ! command -v ufw >/dev/null 2>&1; then
+  read -p "系統未安裝 UFW 防火牆，是否要安裝並配置？(y/N) " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    UFW_BASELINE="yes"
+    echo "✓ 將安裝並配置 UFW 防火牆"
+  else
+    UFW_BASELINE="no"
+    echo "✓ 跳過防火牆安裝"
+  fi
+else
+  read -p "系統已安裝 UFW，是否要配置防火牆規則？(y/N) " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    UFW_BASELINE="yes"
+    echo "✓ 將配置 UFW 防火牆規則"
+  else
+    UFW_BASELINE="no"
+    echo "✓ 跳過防火牆配置"
+  fi
+fi
+
+echo ""
+read -p "確認開始編譯？(y/N) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  echo "已取消編譯"
+  exit 0
+fi
+echo ""
+
+# ===== 檢查並清理前次構建失敗的檔案 =====
+echo ">> 檢查前次構建環境..."
+CLEANUP_NEEDED=0
+
+# 檢查建置目錄
+if [ -d "$BUILD_DIR" ]; then
+  echo "   發現前次建置目錄：$BUILD_DIR"
+  CLEANUP_NEEDED=1
+fi
+
+# 檢查是否有殘留的編譯檔案
+if [ -f "/usr/sbin/nginx.new" ] || [ -f "/usr/sbin/nginx.old" ]; then
+  echo "   發現殘留的 Nginx 備份檔案"
+  CLEANUP_NEEDED=1
+fi
+
+# 檢查是否有未完成的模組檔案
+if [ -d "/usr/lib/nginx/modules.tmp" ]; then
+  echo "   發現未完成的模組目錄"
+  CLEANUP_NEEDED=1
+fi
+
+if [ "$CLEANUP_NEEDED" -eq 1 ]; then
+  echo ""
+  read -p "是否清理前次構建的檔案以保持環境乾淨？(Y/n) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    echo ">> 清理前次構建檔案..."
+    rm -rf "$BUILD_DIR" 2>/dev/null || true
+    $SUDO rm -f /usr/sbin/nginx.new /usr/sbin/nginx.old 2>/dev/null || true
+    $SUDO rm -rf /usr/lib/nginx/modules.tmp 2>/dev/null || true
+    echo "✓ 清理完成"
+  else
+    echo ">> 保留前次構建檔案，繼續執行"
+  fi
+  echo ""
+else
+  echo "✓ 環境乾淨，無需清理"
+  echo ""
+fi
 
 # ===== 停止舊 Nginx（若在跑） =====
 echo ">> 檢查 Nginx 進程..."
@@ -557,19 +641,40 @@ else
   $SUDO service crond restart 2>/dev/null || $SUDO rc-service crond restart 2>/dev/null || true
 fi
 
-# ===== UFW 基線（自動安裝；若無法裝則跳過）=====
-if [ "${UFW_BASELINE:-yes}" = "yes" ]; then
+# ===== UFW 安裝與配置 =====
+if [ "$UFW_BASELINE" = "yes" ]; then
   if ! command -v ufw >/dev/null 2>&1; then
+    echo ">> 正在安裝 UFW 防火牆..."
     if command -v apt-get >/dev/null 2>&1; then
-      echo ">> 未偵測到 UFW，正在安裝..."
       if $SUDO apt-get update -y && $SUDO apt-get install -y ufw; then
-        :
+        echo "✓ UFW 安裝成功"
       else
-        echo "!! UFW 安裝失敗，跳過 UFW 基線"
+        echo "✗ UFW 安裝失敗，跳過防火牆配置"
+        UFW_BASELINE="no"
+      fi
+    elif command -v dnf >/dev/null 2>&1; then
+      if $SUDO dnf -y install ufw; then
+        echo "✓ UFW 安裝成功"
+      else
+        echo "✗ UFW 安裝失敗，跳過防火牆配置"
+        UFW_BASELINE="no"
+      fi
+    elif command -v yum >/dev/null 2>&1; then
+      if $SUDO yum -y install ufw; then
+        echo "✓ UFW 安裝成功"
+      else
+        echo "✗ UFW 安裝失敗，跳過防火牆配置"
+        UFW_BASELINE="no"
+      fi
+    elif command -v apk >/dev/null 2>&1; then
+      if $SUDO apk add --no-cache ufw; then
+        echo "✓ UFW 安裝成功"
+      else
+        echo "✗ UFW 安裝失敗，跳過防火牆配置"
         UFW_BASELINE="no"
       fi
     else
-      echo "!! 非 apt 系統且未安裝 UFW，跳過 UFW 基線"
+      echo "✗ 無法判斷套件管理器，無法自動安裝 UFW"
       UFW_BASELINE="no"
     fi
   fi

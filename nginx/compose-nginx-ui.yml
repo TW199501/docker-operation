@@ -16,7 +16,7 @@ services:
       - 443:443
       - 9168:9168
     volumes:
-      - ./nginx-ui/nginx-configs:/etc/nginx/sites-available
+      - /opt/stacks/nginx-ui/configs/app.ini:/etc/nginx-ui/app.ini:rc
       - ./nginx-ui/nginx-ui-data:/etc/nginx-ui
       - ./nginx-ui/logs:/var/log/nginx
       - ./nginx-ui/run:/var/run
