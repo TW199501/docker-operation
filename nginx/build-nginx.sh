@@ -178,8 +178,8 @@ module_C_source_and_deps() {
   cd "$BUILD_DIR"
 
   # 先編譯安裝 libmaxminddb，提供 ngx_http_geoip2_module 所需的 libmaxminddb.so.0
-  echo ">> 下載並編譯 libmaxminddb 1.7.1"
-  LIBMAX_VER=1.7.1
+  echo ">> 下載並編譯 libmaxminddb 1.12.2"
+  LIBMAX_VER=1.12.2
   curl -fL --retry 3 -o "libmaxminddb-$LIBMAX_VER.tar.gz" \
     "https://github.com/maxmind/libmaxminddb/releases/download/$LIBMAX_VER/libmaxminddb-$LIBMAX_VER.tar.gz"
   tar -xzf "libmaxminddb-$LIBMAX_VER.tar.gz"
