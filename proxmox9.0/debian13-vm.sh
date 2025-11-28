@@ -718,10 +718,9 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable ssh" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'UseDNS no' >> /etc/ssh/sshd_config" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -e 'PasswordAuthentication yes\nUseDNS no' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
@@ -731,6 +730,7 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
