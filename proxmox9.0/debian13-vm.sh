@@ -719,6 +719,10 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/network/interfaces.d/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/systemd/network/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
@@ -728,6 +732,10 @@ else
   # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
   if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/network/interfaces.d/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/systemd/network/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
