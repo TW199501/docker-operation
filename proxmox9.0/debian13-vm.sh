@@ -719,7 +719,7 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo -e 'PasswordAuthentication yes\nUseDNS no' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
@@ -740,10 +740,9 @@ else
   msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
   # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
   if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server >/dev/null 2>&1; then
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable ssh" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'UseDNS no' >> /etc/ssh/sshd_config" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
