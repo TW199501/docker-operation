@@ -721,6 +721,7 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "systemctl enable ssh" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'UseDNS no' >> /etc/ssh/sshd_config" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
@@ -742,6 +743,7 @@ else
     virt-customize -q -a "${FILE}" --run-command "systemctl enable ssh" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'UseDNS no' >> /etc/ssh/sshd_config" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
