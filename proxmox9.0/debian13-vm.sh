@@ -752,6 +752,7 @@ else
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
