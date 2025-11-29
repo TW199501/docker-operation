@@ -1,60 +1,20 @@
 #!/usr/bin/env bash
 # ================================================
 # 編譯 build-nginx.sh
-# 版本：v1.1 (非互動版本)
-# 說明：重構 - 移除互動式流程，支援全自動建置
-# 日期：2025-11-28
+# 版本：v1.0
+# 說明：重構
+# 日期：2025-11-26
 # ===============================================
 set -euo pipefail
 
 # ===== 全域預設變數（可被環境變數覆蓋，確保在 module_A 之前就有值）=====
 BUILD_DIR=${BUILD_DIR:-/home/nginx_build_geoip2}
+
 NGINX_VERSION=${NGINX_VERSION:-1.29.3}
 NGINX_ETC=${NGINX_ETC:-/etc/nginx}
-AUTO_CONFIRM=${AUTO_CONFIRM:-1}      # 自動確認建置
-SKIP_CLEANUP=${SKIP_CLEANUP:-0}     # 跳過清理確認
-FORCE_CLEANUP=${FORCE_CLEANUP:-0}   # 強制清理
-LAN_CIDR=${LAN_CIDR:-"192.168.25.0/24"}
-
-install_nginx_systemd_service() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo ">> 此系統無 systemd，略過 nginx.service 建立"
-    return
-  fi
-
-  local SERVICE_FILE=/etc/systemd/system/nginx.service
-  if [ ! -f "$SERVICE_FILE" ]; then
-    echo ">> 建立 /etc/systemd/system/nginx.service"
-    $SUDO tee "$SERVICE_FILE" >/dev/null <<'UNIT'
-[Unit]
-Description=nginx - high performance web server
-Documentation=man:nginx(8)
-After=network.target remote-fs.target nss-lookup.target
-
-[Service]
-Type=forking
-PIDFile=/run/nginx.pid
-ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'
-ExecStart=/usr/sbin/nginx -g 'daemon on; master_process on;'
-ExecReload=/usr/sbin/nginx -g 'daemon on; master_process on;' -s reload
-ExecStop=/usr/sbin/nginx -s quit
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-  else
-    echo ">> 偵測到既有 nginx.service，略過覆寫"
-  fi
-
-  echo ">> 重新載入 systemd 並啟動 nginx"
-  $SUDO systemctl daemon-reload
-  $SUDO systemctl enable nginx >/dev/null 2>&1 || true
-  if ! $SUDO systemctl restart nginx; then
-    $SUDO systemctl start nginx || true
-  fi
-  $SUDO systemctl status nginx --no-pager || true
-}
+AUTO_CONFIRM=${AUTO_CONFIRM:-1}
+SKIP_SYSTEMD=${SKIP_SYSTEMD:-0}
+SKIP_NGINX_BOOT=${SKIP_NGINX_BOOT:-0}
 
 # ===== 全域 SUDO =====
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
@@ -71,89 +31,6 @@ module_A_interactive_and_params() {
     fi
     SUDO="sudo"
   fi
-
-  # ===== 顯示配置並確認 =====
-  echo "=========================================="
-  echo "  Nginx 編譯配置"
-  echo "=========================================="
-  echo "Nginx 版本：    $NGINX_VERSION"
-  echo "OpenSSL 版本：  3.5.4"
-  echo "PCRE2 來源：    git (PCRE2Project/pcre2)"
-  echo "建置目錄：      $BUILD_DIR"
-  echo "內網 CIDR:     $LAN_CIDR"
-  echo "zlib 版本：     1.3.1 (source)"
-  echo "brotli 來源：    ngx_brotli (source build)"
-  echo "GeoIP2 套件：   libmaxminddb0 / libmaxminddb-dev / mmdb-bin"
-  echo "GoAccess 來源： git (allinurl/goaccess)"
-  echo "=========================================="
-  echo ""
-  echo ""
-  read -p "確認開始編譯？(y/N) " -n 1 -r
-  echo
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "已取消編譯"
-    exit 0
-  fi
-  echo ""
-}
-
-module_B_cleanup_and_stop_old_nginx() {
-  # ===== 檢查並清理前次構建失敗的檔案 =====
-  echo ">> 檢查前次構建環境..."
-  CLEANUP_NEEDED=0
-
-  # 檢查建置目錄
-  if [ -d "$BUILD_DIR" ]; then
-    echo "   發現前次建置目錄：$BUILD_DIR"
-    CLEANUP_NEEDED=1
-  fi
-
-  # 檢查是否有殘留的編譯檔案
-  if [ -f "/usr/sbin/nginx.new" ] || [ -f "/usr/sbin/nginx.old" ]; then
-    echo "   發現殘留的 Nginx 備份檔案"
-    CLEANUP_NEEDED=1
-  fi
-
-  # 檢查是否有未完成的模組檔案
-  if [ -d "/usr/lib/nginx/modules.tmp" ]; then
-    echo "   發現未完成的模組目錄"
-    CLEANUP_NEEDED=1
-  fi
-
-  if [ "$CLEANUP_NEEDED" -eq 1 ]; then
-    echo ""
-    read -p "是否清理前次構建的檔案以保持環境乾淨？(Y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-      echo ">> 清理前次構建檔案..."
-      rm -rf "$BUILD_DIR" 2>/dev/null || true
-      $SUDO rm -f /usr/sbin/nginx.new /usr/sbin/nginx.old 2>/dev/null || true
-      $SUDO rm -rf /usr/lib/nginx/modules.tmp 2>/dev/null || true
-      echo "✓ 清理完成"
-    else
-      echo ">> 保留前次構建檔案，繼續執行"
-    fi
-    echo ""
-  else
-    echo "✓ 環境乾淨，無需清理"
-    echo ""
-  fi
-
-  # ===== 停止舊 Nginx（若在跑） =====
-  echo ">> 檢查 Nginx 進程..."
-  if pgrep -x nginx >/dev/null; then
-    echo "   停止 nginx ..."
-    if command -v systemctl >/dev/null 2>&1; then
-      $SUDO systemctl stop nginx || true
-    else
-      $SUDO pkill -TERM -x nginx || true
-    fi
-    sleep 3
-    if pgrep -x nginx >/dev/null; then
-      $SUDO pkill -KILL -x nginx || true
-    fi
-  fi
-  $SUDO rm -f /run/nginx.pid || true
 }
 
 module_C_source_and_deps() {
@@ -356,6 +233,7 @@ MODULES=(
   ngx_http_headers_more_filter_module.so
   ngx_http_image_filter_module.so
   ngx_http_js_module.so
+  ngx_stream_module.so
   ngx_stream_geoip2_module.so
   ngx_stream_js_module.so
 )
@@ -919,23 +797,70 @@ module_G_ensure_nginx_run_user() {
     /var/cache/nginx/scgi_temp
 }
 
+install_nginx_systemd_service() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo ">> 此系統無 systemd，略過 nginx.service 建立"
+    return
+  fi
+
+  local SERVICE_FILE=/etc/systemd/system/nginx.service
+  if [ ! -f "$SERVICE_FILE" ]; then
+    echo ">> 建立 /etc/systemd/system/nginx.service"
+    $SUDO tee "$SERVICE_FILE" >/dev/null <<'UNIT'
+[Unit]
+Description=nginx - high performance web server
+Documentation=man:nginx(8)
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+PIDFile=/run/nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'
+ExecStart=/usr/sbin/nginx -g 'daemon on; master_process on;'
+ExecReload=/usr/sbin/nginx -g 'daemon on; master_process on;' -s reload
+ExecStop=/usr/sbin/nginx -s quit
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  else
+    echo ">> 偵測到既有 nginx.service，略過覆寫"
+  fi
+
+  echo ">> 重新載入 systemd 並啟動 nginx"
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable nginx >/dev/null 2>&1 || true
+  if ! $SUDO systemctl restart nginx; then
+    $SUDO systemctl start nginx || true
+  fi
+  $SUDO systemctl status nginx --no-pager || true
+}
+
 module_A_interactive_and_params
-module_B_cleanup_and_stop_old_nginx
 module_C_source_and_deps
 module_D_build_nginx_and_base_init
 module_E_geoip_cloudflare_init
 module_F_update_geoip_install_and_timer
 module_H_build_modsecurity_waf
-install_nginx_systemd_service
+if [ "$SKIP_SYSTEMD" -ne 1 ]; then
+  install_nginx_systemd_service
+else
+  echo ">> SKIP_SYSTEMD=1，略過 systemd 服務建立"
+fi
 
 # ===== 首次更新、驗證 =====
-echo ">> 先啟動 Nginx（若尚未啟動）"
-if command -v nginx >/dev/null 2>&1 && ! pgrep -x nginx >/dev/null 2>&1; then
-  if command -v systemctl >/dev/null 2>&1; then
-    $SUDO systemctl start nginx 2>/dev/null || $SUDO nginx || \
-      echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
-  else
-    $SUDO nginx || echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
+if [ "$SKIP_NGINX_BOOT" -eq 1 ]; then
+  echo ">> SKIP_NGINX_BOOT=1，略過自動啟動 Nginx"
+else
+  echo ">> 先啟動 Nginx（若尚未啟動）"
+  if command -v nginx >/dev/null 2>&1 && ! pgrep -x nginx >/dev/null 2>&1; then
+    if command -v systemctl >/dev/null 2>&1; then
+      $SUDO systemctl start nginx 2>/dev/null || $SUDO nginx || \
+        echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
+    else
+      $SUDO nginx || echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
+    fi
   fi
 fi
 

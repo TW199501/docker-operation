@@ -1,0 +1,26 @@
+name: hanginx
+services:
+  elf-nginx:
+    build:
+      context: ..
+      dockerfile: nginx1.29.3-docker/Dockerfile
+    image: tw199501/nginx:1.29.3
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Taipei
+  haproxy:
+    container_name: haproxy
+    build:
+      context: .
+      dockerfile: haproxy/Dockerfile
+    image: tw199501/haproxy:trixie
+    restart: unless-stopped
+    depends_on:
+      - elf-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+

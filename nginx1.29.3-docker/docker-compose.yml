@@ -1,22 +1,55 @@
-version: "3.9"
-
+name: elfnginxhaproxy
 services:
   elf-nginx:
     container_name: elf-nginx
-    build:
-      context: .
-      dockerfile: nginx/Dockerfile
-    image: elf-nginx:latest
+    image: tw199501/elf-nginx:1.29.3
     restart: unless-stopped
+    environment:
+      - TZ=Asia/Taipei
+    volumes:
+      - ./nginx/etc:/etc/nginx
+      - ./nginx/modules:/usr/lib/nginx/modules
+      - ./nginx/logs:/var/log/nginx
+      - ./nginx/cache:/var/cache/nginx
+      - ./nginx/geoip:/usr/share/GeoIP
+      - ./scripts:/opt/keepalived
+    networks:
+      - elf-internal
+
+
+name: haprox
+services:
+  elf-nginx:
+    container_name: elf-nginx
+    image: tw199501/elf-nginx:1.29.3
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Taipei
+    volumes:
+      - ./nginx/etc:/etc/nginx
+      - ./nginx/modules:/usr/lib/nginx/modules
+      - ./nginx/logs:/var/log/nginx
+      - ./nginx/cache:/var/cache/nginx
+      - ./nginx/geoip:/usr/share/GeoIP
+      - ./keepalived:/opt/keepalived
+    networks:
+      - elf-internal
+  haproxy:
+    container_name: haproxy
+    image: tw199501/haproxy:trixie
+    restart: unless-stopped
+    depends_on:
+      - elf-nginx
     ports:
       - "80:80"
       - "443:443"
+      - "8404:8404"
+
     volumes:
-      - ./volumes/nginx/etc:/etc/nginx
-      - ./volumes/nginx/modules:/usr/lib/nginx/modules
-      - ./volumes/nginx/logs:/var/log/nginx
-      - ./volumes/nginx/cache:/var/cache/nginx
-      - ./volumes/nginx/geoip:/usr/share/GeoIP
-      - ./volumes/nginx/keepalived:/etc/keepalived
-    environment:
-      - KEEPALIVED_CONF=/etc/keepalived/keepalived.conf
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - elf-internal
+
+networks:
+  elf-internal:
+

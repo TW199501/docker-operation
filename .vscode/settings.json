@@ -1,11 +1,78 @@
 {
+  "todo-tree.general.tags": [
+    "TODO", // 一般待辦事項
+    "FIXME",
+    "BUG",
+    "HACK",
+    "NOTE",
+    "[ ]", // 做什麼事
+    "[x]"
+  ],
+  // 把同性質的 tag 視為同一組，樹狀就不會分太散
+  "todo-tree.general.tagGroups": {
+    "FIXME": [
+      "FIXME",
+      "BUG",
+      "HACK"
+    ]
+  },
+// 同時支援一般註解 + Markdown task list
+"todo-tree.regex.regex": "(//|#|<!--|;|/\\*|^|^\\s*(-|\\d+.))\\s*($TAGS)",
+"todo-tree.regex.regexCaseSensitive": true,
+
+"todo-tree.filtering.excludeGlobs": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/coverage/**",
+    "**/*.min.js",
+    "**/*.log"
+],
+"todo-tree.filtering.useBuiltInExcludes": "file and search excludes",
+"todo-tree.filtering.includeHiddenFiles": false,
+
+
+"todo-tree.highlights.useColourScheme": true,
+"todo-tree.highlights.backgroundColourScheme": [
+    "rgba(0,122,204,0.)",   // TODO
+    "rgba(255,0,0,0.75)",     // FIXME
+    "rgba(255,128,0,0.75)",   // BUG
+    "rgba(0,180,0,0.75)",     // HACK
+    "rgba(128,128,128,0.75)", // NOTE
+    "transparent",   // [ ]
+    "#00c8ff"      // [x]
+],
+
+// 預設掃整個 workspace
+"todo-tree.tree.scanMode": "workspace",
+"todo-tree.general.enableFileWatcher": true,
+
+// Tree 呈現習慣
+"todo-tree.tree.flat": false,
+"todo-tree.tree.grouped": true,          // 預設依 tag 分組
+"todo-tree.tree.tagsOnly": false,
+"todo-tree.tree.showCountsInTree": true, // 每個節點顯示數量
+"todo-tree.tree.trackFile": true,        // 切檔案時自動在 tree 追蹤
+"todo-tree.tree.labelFormat": "${tag} ${after}",
+"todo-tree.tree.tooltipFormat": "${filepath}, ${line}",
+
+// 標題列按鈕
+"todo-tree.tree.buttons.viewStyle": true,
+"todo-tree.tree.buttons.groupByTag": true,
+"todo-tree.tree.buttons.groupBySubTag": false,
+"todo-tree.tree.buttons.scanMode": true,
+"todo-tree.tree.buttons.filter": true,
+"todo-tree.tree.buttons.refresh": true,
+
+"todo-tree.general.statusBar": "tags",              // 顯示各 tag 數量
+"todo-tree.general.statusBarClickBehaviour": "reveal",
   // General Settings
   "editor.fontFamily": "'Maple Mono', 'JetBrains Mono', 'Cascadia Code', 'Iosevka Term', monospace",
   "editor.fontLigatures": true,
   "editor.fontWeight": "normal",
   "mssql.maxRecentConnections": 5,
-  "mssql.enableRichExperiences": true,
-  "mssql.openQueryResultsInTabByDefault": false,
+
   "mssql.logDebugInfo": false,
   "mssql.messagesDefaultOpen": true,
   "mssql.connectionManagement.rememberPasswordsUntilRestart": true,
@@ -171,5 +238,5 @@
 "editor.quickSuggestions": {
     "other": "off"
 },
-"telemetry.editStats.enabled": false
+
 }

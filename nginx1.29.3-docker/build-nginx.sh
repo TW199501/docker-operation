@@ -9,52 +9,114 @@ set -euo pipefail
 
 # ===== 全域預設變數（可被環境變數覆蓋，確保在 module_A 之前就有值）=====
 BUILD_DIR=${BUILD_DIR:-/home/nginx_build_geoip2}
-
-install_nginx_systemd_service() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo ">> 此系統無 systemd，略過 nginx.service 建立"
-    return
-  fi
-
-  local SERVICE_FILE=/etc/systemd/system/nginx.service
-  if [ ! -f "$SERVICE_FILE" ]; then
-    echo ">> 建立 /etc/systemd/system/nginx.service"
-    $SUDO tee "$SERVICE_FILE" >/dev/null <<'UNIT'
-[Unit]
-Description=nginx - high performance web server
-Documentation=man:nginx(8)
-After=network.target remote-fs.target nss-lookup.target
-
-[Service]
-Type=forking
-PIDFile=/run/nginx.pid
-ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'
-ExecStart=/usr/sbin/nginx -g 'daemon on; master_process on;'
-ExecReload=/usr/sbin/nginx -g 'daemon on; master_process on;' -s reload
-ExecStop=/usr/sbin/nginx -s quit
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-  else
-    echo ">> 偵測到既有 nginx.service，略過覆寫"
-  fi
-
-  echo ">> 重新載入 systemd 並啟動 nginx"
-  $SUDO systemctl daemon-reload
-  $SUDO systemctl enable nginx >/dev/null 2>&1 || true
-  if ! $SUDO systemctl restart nginx; then
-    $SUDO systemctl start nginx || true
-  fi
-  $SUDO systemctl status nginx --no-pager || true
-}
 NGINX_VERSION=${NGINX_VERSION:-1.29.3}
-LAN_CIDR=${LAN_CIDR:-"192.168.25.0/24"}
 NGINX_ETC=${NGINX_ETC:-/etc/nginx}
-AUTO_CONFIRM=${AUTO_CONFIRM:-0}
+AUTO_CONFIRM=${AUTO_CONFIRM:-1}
 SKIP_SYSTEMD=${SKIP_SYSTEMD:-0}
 SKIP_NGINX_BOOT=${SKIP_NGINX_BOOT:-0}
+IN_CONTAINER=${IN_CONTAINER:-0}
+
+LOG_DIR=${LOG_DIR:-/tmp/elf-nginx-build}
+LOG_FILE=${LOG_FILE:-"$LOG_DIR/build-nginx-$(date +%Y%m%d-%H%M%S).log"}
+RESUME_ENABLED=${RESUME_ENABLED:-1}
+CLEAN_BUILD=${CLEAN_BUILD:-0}
+BUILD_STATE_FILE=${BUILD_STATE_FILE:-"$BUILD_DIR/.build_state"}
+CURRENT_STAGE="initialization"
+
+init_logging() {
+  mkdir -p "$LOG_DIR"
+  touch "$LOG_FILE"
+}
+
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log_with_level() {
+  local level="$1"
+  shift
+  printf '[%s] [%s] %s\n' "$(timestamp)" "$level" "$*" >>"$LOG_FILE"
+  printf '[%s] [%s] %s\n' "$(timestamp)" "$level" "$*"
+}
+
+log_info() { log_with_level INFO "$@"; }
+log_warn() { log_with_level WARN "$@"; }
+log_error() { log_with_level ERROR "$@"; }
+
+detect_container_env() {
+  if [ -f "/.dockerenv" ]; then
+    IN_CONTAINER=1
+    return
+  fi
+  if grep -qiE '(docker|containerd|kubepods)' /proc/1/cgroup 2>/dev/null; then
+    IN_CONTAINER=1
+  else
+    IN_CONTAINER=0
+  fi
+}
+
+on_error() {
+  local exit_code="$1"
+  local line="$2"
+  log_error "Stage ${CURRENT_STAGE} failed at line ${line} (exit ${exit_code})"
+}
+
+on_exit() {
+  local exit_code="$1"
+  if [ "$exit_code" -eq 0 ]; then
+    log_info "build-nginx.sh completed successfully"
+  else
+    log_warn "build-nginx.sh exited with status $exit_code"
+  fi
+}
+
+reset_stage_state() {
+  rm -f "$BUILD_STATE_FILE" 2>/dev/null || true
+}
+
+stage_completed() {
+  [ -f "$BUILD_STATE_FILE" ] && grep -Fxq "$1" "$BUILD_STATE_FILE"
+}
+
+mark_stage_done() {
+  mkdir -p "$(dirname "$BUILD_STATE_FILE")"
+  if ! stage_completed "$1"; then
+    echo "$1" >>"$BUILD_STATE_FILE"
+  fi
+}
+
+run_stage() {
+  local stage_name="$1"
+  shift
+  CURRENT_STAGE="$stage_name"
+  if [ "$RESUME_ENABLED" -eq 1 ] && stage_completed "$stage_name"; then
+    log_info "跳過 ${stage_name}（檢測到已完成）"
+    return 0
+  fi
+  log_info "開始 ${stage_name}"
+  "$@"
+  mark_stage_done "$stage_name"
+  log_info "完成 ${stage_name}"
+}
+
+initialize_resume_state() {
+  if [ "$CLEAN_BUILD" -eq 1 ]; then
+    log_info "CLEAN_BUILD=1，移除既有狀態並重新建置"
+    rm -rf "$BUILD_DIR" 2>/dev/null || true
+    reset_stage_state
+  elif [ "$RESUME_ENABLED" -eq 0 ]; then
+    log_info "RESUME_ENABLED=0，清除續建快取"
+    reset_stage_state
+  fi
+}
+
+init_logging
+exec > >(tee -a "$LOG_FILE") 2>&1
+trap 'on_error $? $LINENO' ERR
+trap 'on_exit $?' EXIT
+log_info "Log file: $LOG_FILE"
+
+detect_container_env
 
 # ===== 全域 SUDO =====
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
@@ -71,106 +133,22 @@ module_A_interactive_and_params() {
     fi
     SUDO="sudo"
   fi
-
-  # ===== 顯示配置並確認 =====
-  echo "=========================================="
-  echo "  Nginx 編譯配置"
-  echo "=========================================="
-  echo "Nginx 版本：    $NGINX_VERSION"
-  echo "OpenSSL 版本：  3.5.4"
-  echo "PCRE2 來源：    git (PCRE2Project/pcre2)"
-  echo "建置目錄：      $BUILD_DIR"
-  echo "內網 CIDR:     $LAN_CIDR"
-  echo "zlib 版本：     1.3.1 (source)"
-  echo "brotli 來源：    ngx_brotli (source build)"
-  echo "GeoIP2 套件：   libmaxminddb0 / libmaxminddb-dev / mmdb-bin"
-  echo "GoAccess 來源： git (allinurl/goaccess)"
-  echo "=========================================="
-  echo ""
-  echo ""
-  if [ "$AUTO_CONFIRM" -eq 1 ]; then
-    REPLY="y"
-    echo "(AUTO_CONFIRM=1，自動開始編譯)"
-  else
-    read -p "確認開始編譯？(y/N) " -n 1 -r
-    echo
-  fi
-  if [[ ! ${REPLY:-} =~ ^[Yy]$ ]]; then
-    echo "已取消編譯"
-    exit 0
-  fi
-  echo ""
-}
-
-module_B_cleanup_and_stop_old_nginx() {
-  # ===== 檢查並清理前次構建失敗的檔案 =====
-  echo ">> 檢查前次構建環境..."
-  CLEANUP_NEEDED=0
-
-  # 檢查建置目錄
-  if [ -d "$BUILD_DIR" ]; then
-    echo "   發現前次建置目錄：$BUILD_DIR"
-    CLEANUP_NEEDED=1
-  fi
-
-  # 檢查是否有殘留的編譯檔案
-  if [ -f "/usr/sbin/nginx.new" ] || [ -f "/usr/sbin/nginx.old" ]; then
-    echo "   發現殘留的 Nginx 備份檔案"
-    CLEANUP_NEEDED=1
-  fi
-
-  # 檢查是否有未完成的模組檔案
-  if [ -d "/usr/lib/nginx/modules.tmp" ]; then
-    echo "   發現未完成的模組目錄"
-    CLEANUP_NEEDED=1
-  fi
-
-  if [ "$CLEANUP_NEEDED" -eq 1 ]; then
-    echo ""
-    if [ "$AUTO_CONFIRM" -eq 1 ]; then
-      REPLY="y"
-      echo "(AUTO_CONFIRM=1，自動清理前次構建)"
-    else
-      read -p "是否清理前次構建的檔案以保持環境乾淨？(Y/n) " -n 1 -r
-      echo
-    fi
-    if [[ ! ${REPLY:-} =~ ^[Nn]$ ]]; then
-      echo ">> 清理前次構建檔案..."
-      rm -rf "$BUILD_DIR" 2>/dev/null || true
-      $SUDO rm -f /usr/sbin/nginx.new /usr/sbin/nginx.old 2>/dev/null || true
-      $SUDO rm -rf /usr/lib/nginx/modules.tmp 2>/dev/null || true
-      echo "✓ 清理完成"
-    else
-      echo ">> 保留前次構建檔案，繼續執行"
-    fi
-    echo ""
-  else
-    echo "✓ 環境乾淨，無需清理"
-    echo ""
-  fi
-
-  # ===== 停止舊 Nginx（若在跑） =====
-  echo ">> 檢查 Nginx 進程..."
-  if pgrep -x nginx >/dev/null; then
-    echo "   停止 nginx ..."
-    if command -v systemctl >/dev/null 2>&1; then
-      $SUDO systemctl stop nginx || true
-    else
-      $SUDO pkill -TERM -x nginx || true
-    fi
-    sleep 3
-    if pgrep -x nginx >/dev/null; then
-      $SUDO pkill -KILL -x nginx || true
-    fi
-  fi
-  $SUDO rm -f /run/nginx.pid || true
 }
 
 module_C_source_and_deps() {
   # ===== 準備建置目錄 =====
-  echo ">> 建立建置目錄：$BUILD_DIR"
-  rm -rf "$BUILD_DIR"
-  mkdir -p "$BUILD_DIR"
+  log_info ">> 準備建置目錄：$BUILD_DIR"
+  if [ -d "$BUILD_DIR" ]; then
+    if [ "$CLEAN_BUILD" -eq 1 ]; then
+      log_info "CLEAN_BUILD=1，清除 $BUILD_DIR"
+      rm -rf "$BUILD_DIR"
+      mkdir -p "$BUILD_DIR"
+    else
+      log_info "偵測到既有建置目錄，將覆用並覆寫必要檔案"
+    fi
+  else
+    mkdir -p "$BUILD_DIR"
+  fi
   cd "$BUILD_DIR"
   NGINX_ETC="${NGINX_ETC:-/etc/nginx}"   # Nginx 設定目錄
 
@@ -331,13 +309,33 @@ make modules -j"$(nproc)"
 $SUDO mkdir -p /usr/lib/nginx/modules
 $SUDO cp objs/*.so /usr/lib/nginx/modules/
 
-echo ">> 略過 GoAccess 安裝（將在安裝 WAF 時再處理）"
+  # 調整 nginx worker 相關參數（processes / connections / nofile）
+  NG_CONF="/etc/nginx/nginx.conf"
+  if [ -f "$NG_CONF" ]; then
+    # worker_processes auto;
+    if grep -q 'worker_processes' "$NG_CONF"; then
+      $SUDO sed -i 's/^\s*worker_processes\s\+[^;]*;/worker_processes auto;/' "$NG_CONF"
+    else
+      $SUDO sed -i '1i worker_processes auto;' "$NG_CONF"
+    fi
 
-# 模組載入首次安裝：全載 + 存在檢查
-echo ">> 初始化 Nginx 目錄與模組（首次安裝）"
+    # worker_rlimit_nofile 65535;
+    if grep -q 'worker_rlimit_nofile' "$NG_CONF"; then
+      $SUDO sed -i 's/^\s*worker_rlimit_nofile\s\+[^;]*;/worker_rlimit_nofile 65535;/' "$NG_CONF"
+    else
+      $SUDO sed -i '1i worker_rlimit_nofile 65535;' "$NG_CONF"
+    fi
+
+    # events { worker_connections 4096; }
+    if grep -q 'worker_connections' "$NG_CONF"; then
+      $SUDO sed -i '/events {/,/}/ s/^\(\s*worker_connections\)\s\+[0-9]\+;/\1 4096;/' "$NG_CONF"
+    else
+      $SUDO sed -i '/events {/a \\    worker_connections 4096;' "$NG_CONF"
+    fi
+  fi
 
 # 基本目錄（http / stream / geoip / ssl / modules）
-$SUDO mkdir -p \
+  $SUDO mkdir -p \
   "$NGINX_ETC/conf.d" \
   "$NGINX_ETC/sites-available" \
   "$NGINX_ETC/sites-enabled" \
@@ -371,35 +369,23 @@ MODULES=(
   ngx_stream_js_module.so
 )
 
-# 重新生成模組設定（寫入 modules.conf，供 main context 載入）
-MODULES_CONF="$NGINX_ETC/modules.conf"
+# 重新生成模組設定（寫入 default.modules.main.conf，供 main context 載入）
+MODULES_CONF="$NGINX_ETC/default.modules.main.conf"
 $SUDO rm -f "$MODULES_CONF"
 {
   for so in "${MODULES[@]}"; do
     if [ -f "/usr/lib/nginx/modules/$so" ]; then
-      echo "load_module /usr/lib/nginx/modules/$so;"
+      echo "# load_module /usr/lib/nginx/modules/$so;"
     fi
   done
 } | $SUDO tee "$MODULES_CONF" >/dev/null
 
-# 確保 modules.conf 在 main context 被 include
-if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/modules\.conf;?' /etc/nginx/nginx.conf; then
-  echo ">> 在 nginx.conf 最前加入 modules.conf include"
-  $SUDO sed -i '1i include /etc/nginx/modules.conf;' /etc/nginx/nginx.conf
+# 確保 default.modules.main.conf 在 main context 被 include
+if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/default\.modules\.main\.conf;?' /etc/nginx/nginx.conf; then
+  echo ">> 在 nginx.conf 最前加入 default.modules.main.conf include"
+  $SUDO sed -i '1i include /etc/nginx/default.modules.main.conf;' /etc/nginx/nginx.conf
 fi
 
-# 建立 SSL 通用配置（如不存在）
-if [ ! -f "$NGINX_ETC/conf.d/ssl.conf" ]; then
-  echo ">> 建立 $NGINX_ETC/conf.d/ssl.conf"
-  $SUDO tee "$NGINX_ETC/conf.d/ssl.conf" >/dev/null <<'SSL_CONF'
-# SSL 設置
-ssl_protocols TLSv1.2 TLSv1.3;
-ssl_prefer_server_ciphers on;
-ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
-ssl_session_cache shared:SSL:10m;
-ssl_session_timeout 10m;
-SSL_CONF
-fi
 
 # 確保 http{} 內有 include sites-enabled/*
 if ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/sites-enabled/\*;?' /etc/nginx/nginx.conf; then
@@ -434,33 +420,7 @@ if [ ! -e /etc/nginx/sites-enabled/default.conf ]; then
   $SUDO ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
 fi
 
-# 初始化 IP 白名單配置（如不存在，存放於 /etc/nginx/geoip）
-if [ ! -f /etc/nginx/geoip/ip_whitelist.conf ]; then
-  echo ">> 建立 /etc/nginx/geoip/ip_whitelist.conf 範例"
-  $SUDO tee /etc/nginx/geoip/ip_whitelist.conf >/dev/null << 'NG'
-# IP 白名單配置（由 /etc/nginx/scripts/manage_ip.sh 維護）
-# 預設全部拒絕，按需加入 allow 規則
-deny all;
 
-# 範例：允許內網與單一 IP
-#allow 192.168.1.0/24;
-#allow 10.0.0.1;
-NG
-fi
-
-# 初始化 IP 黑名單配置（如不存在，存放於 /etc/nginx/geoip）
-if [ ! -f /etc/nginx/geoip/ip_blacklist.conf ]; then
-  echo ">> 建立 /etc/nginx/geoip/ip_blacklist.conf 範例"
-  $SUDO tee /etc/nginx/geoip/ip_blacklist.conf >/dev/null <<'BL'
-# IP 黑名單配置
-# 預設全部允許，按需加入 deny 規則
-allow all;
-
-# 範例：封鎖單一 IP 或網段
-#deny 203.0.113.5;
-#deny 198.51.100.0/24;
-BL
-fi
 
   # ===== 確認 Nginx binary 與語法正常，否則中止後續 GeoIP/更新腳本安裝 =====
   echo ">> 初次檢查 nginx 版本與語法"
@@ -506,32 +466,6 @@ $SUDO wget -q -O /usr/share/GeoIP/GeoLite2-Country.mmdb "$COUNTRY_URL"
   $SUDO install -m0644 "$TMP_CF/cloudflare_v4_realip.conf" /etc/nginx/geoip/cloudflare_v4_realip.conf
   $SUDO install -m0644 "$TMP_CF/cloudflare_v6_realip.conf" /etc/nginx/geoip/cloudflare_v6_realip.conf
 
-  $SUDO tee /etc/nginx/conf.d/cloudflare.conf >/dev/null << 'NG'
-
-# Cloudflare / cloudflared real_ip & GeoIP2
-include /etc/nginx/geoip/cloudflare_v4_realip.conf;
-include /etc/nginx/geoip/cloudflare_v6_realip.conf;
-
-#set_real_ip_from 172.20.0.0/16; # cloudflared 隧道 IP
-#set_real_ip_from 127.0.0.1;
-
-#real_ip_header X-Forwarded-For;
-#real_ip_recursive on;
-
-# GeoIP2
-#geoip2_proxy_recursive on;
-#geoip2 /usr/share/GeoIP/GeoLite2-Country.mmdb {
-#auto_reload 5m;
-#geoip2_metadata_country_build metadata build_epoch;
-#$geoip2_data_country_code source=$remote_addr country iso_code;
-$geoip2_data_country_name country names en;
-}
-geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb {
-$geoip2_data_city_name city names en;
-$geoip2_data_city_longitude location longitude;
-$geoip2_data_city_latitude location latitude;
-}
-NG
 }
 
 module_F_update_geoip_install_and_timer() {
@@ -580,10 +514,15 @@ else
 fi
 UPD
 
-$SUDO chmod +x /etc/nginx/scripts/update_geoip.sh
+  $SUDO chmod +x /etc/nginx/scripts/update_geoip.sh
 
-# 安排排程（systemd 優先，否則 /etc/cron.d，再否則 crontabs/root）
-if command -v systemctl >/dev/null 2>&1; then
+if [ "${IN_CONTAINER:-0}" -eq 1 ] && ! command -v cron >/dev/null 2>&1; then
+  echo ">> 檢測到容器環境且無 cron，略過系統層排程安裝（請在宿主機或外部 scheduler 安排 update_geoip.sh）"
+  return 0
+fi
+
+# 安排排程（非容器優先使用 systemd，其次 /etc/cron.d，再其次 crontabs/root）
+if [ "${SKIP_SYSTEMD:-0}" -eq 0 ] && [ "${IN_CONTAINER:-0}" -eq 0 ] && command -v systemctl >/dev/null 2>&1; then
   echo ">> 使用 systemd timer 安排排程"
   $SUDO tee /etc/systemd/system/update-geoip.service >/dev/null <<'UNIT'
 [Unit]
@@ -805,11 +744,11 @@ EXC
   $SUDO install -d -m 0755 "$CONF_D_DIR"
   $SUDO tee "$CONF_D_DIR/waf.conf" >/dev/null <<'NG'
 # 載入 ModSecurity 動態模組
-load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;
+# load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;
 
 # 啟用 ModSecurity (http 區塊）
-modsecurity on;
-modsecurity_rules_file /etc/nginx/modsecurity/main.conf;
+# modsecurity on;
+# modsecurity_rules_file /etc/nginx/modsecurity/main.conf;
 NG
 
   echo "   - 主設定：$MAIN_CONF"
@@ -843,58 +782,13 @@ NG
   echo "   - 包含檔：${MAIN_CONF}"
 }
 
-# 4) 設定 IP 白名單管理
-# 創建 IP 管理腳本（集中在 /etc/nginx/scripts/manage_ip.sh）
-$SUDO mkdir -p /etc/nginx/scripts
-$SUDO tee /etc/nginx/scripts/manage_ip.sh >/dev/null <<'UPD'
-#!/usr/bin/env bash
-set -euo pipefail
+  # 4) 設定 IP 白名單管理
+  # 創建 IP 管理腳本（集中在 /etc/nginx/scripts/manage_ip.sh）
+  $SUDO mkdir -p /etc/nginx/scripts
 
-usage() {
-  echo "用法: $0 <allow|deny> <IP地址> <配置文件路徑>" >&2
-  echo "示例: $0 allow 192.168.1.100 /etc/nginx/conf.d/ip_whitelist.conf" >&2
-}
-
-if [ "$#" -ne 3 ]; then
-  usage
-  exit 1
+if [ -f /etc/nginx/scripts/manage_ip.sh ]; then
+  $SUDO chmod +x /etc/nginx/scripts/manage_ip.sh
 fi
-
-ACTION="$1"
-IP_ADDRESS="$2"
-CONFIG_FILE="$3"
-
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "配置文件不存在: $CONFIG_FILE" >&2
-  exit 1
-fi
-
-case "$ACTION" in
-  allow)
-    if grep -q "allow $IP_ADDRESS;" "$CONFIG_FILE"; then
-      echo "IP $IP_ADDRESS 已在白名單中"
-    else
-      # 在 deny all; 之前插入 allow 規則
-      sed -i "/deny all;/i\    allow $IP_ADDRESS;" "$CONFIG_FILE"
-      echo "已添加 IP $IP_ADDRESS 到白名單"
-    fi
-    ;;
-  deny)
-    if grep -q "allow $IP_ADDRESS;" "$CONFIG_FILE"; then
-      sed -i "/allow $IP_ADDRESS;/d" "$CONFIG_FILE"
-      echo "已從白名單中移除 IP $IP_ADDRESS"
-    else
-      echo "IP $IP_ADDRESS 不在白名單中"
-    fi
-    ;;
-  *)
-    echo "無效的動作，請使用 'allow' 或 'deny'" >&2
-    exit 1
-    ;;
-esac
-UPD
-
-$SUDO chmod +x /etc/nginx/scripts/manage_ip.sh
 
 # 測試並重新加載 Nginx 配置（僅在系統已有 nginx 指令時執行）
 if command -v nginx >/dev/null 2>&1; then
@@ -930,41 +824,87 @@ module_G_ensure_nginx_run_user() {
     /var/cache/nginx/scgi_temp
 }
 
-module_A_interactive_and_params
-module_B_cleanup_and_stop_old_nginx
-module_C_source_and_deps
-module_D_build_nginx_and_base_init
-module_E_geoip_cloudflare_init
-module_F_update_geoip_install_and_timer
-module_H_build_modsecurity_waf
-if [ "$SKIP_SYSTEMD" -ne 1 ]; then
-  install_nginx_systemd_service
-else
-  echo ">> SKIP_SYSTEMD=1，略過 systemd 服務建立"
-fi
+install_nginx_systemd_service() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo ">> 此系統無 systemd，略過 nginx.service 建立"
+    return
+  fi
 
-# ===== 首次更新、驗證 =====
-if [ "$SKIP_NGINX_BOOT" -eq 1 ]; then
-  echo ">> SKIP_NGINX_BOOT=1，略過自動啟動 Nginx"
-else
-  echo ">> 先啟動 Nginx（若尚未啟動）"
-  if command -v nginx >/dev/null 2>&1 && ! pgrep -x nginx >/dev/null 2>&1; then
-    if command -v systemctl >/dev/null 2>&1; then
-      $SUDO systemctl start nginx 2>/dev/null || $SUDO nginx || \
-        echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
-    else
-      $SUDO nginx || echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
+  local SERVICE_FILE=/etc/systemd/system/nginx.service
+  if [ ! -f "$SERVICE_FILE" ]; then
+    echo ">> 建立 /etc/systemd/system/nginx.service"
+    $SUDO tee "$SERVICE_FILE" >/dev/null <<'UNIT'
+[Unit]
+Description=nginx - high performance web server
+Documentation=man:nginx(8)
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+PIDFile=/run/nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'
+ExecStart=/usr/sbin/nginx -g 'daemon on; master_process on;'
+ExecReload=/usr/sbin/nginx -g 'daemon on; master_process on;' -s reload
+ExecStop=/usr/sbin/nginx -s quit
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  else
+    echo ">> 偵測到既有 nginx.service，略過覆寫"
+  fi
+
+  echo ">> 重新載入 systemd 並啟動 nginx"
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable nginx >/dev/null 2>&1 || true
+  if ! $SUDO systemctl restart nginx; then
+    $SUDO systemctl start nginx || true
+  fi
+  $SUDO systemctl status nginx --no-pager || true
+}
+
+module_I_post_install_tasks() {
+  # ===== 首次更新、驗證 =====
+  if [ "$SKIP_NGINX_BOOT" -eq 1 ]; then
+    echo ">> SKIP_NGINX_BOOT=1，略過自動啟動 Nginx"
+  else
+    echo ">> 先啟動 Nginx（若尚未啟動）"
+    if command -v nginx >/dev/null 2>&1 && ! pgrep -x nginx >/dev/null 2>&1; then
+      if command -v systemctl >/dev/null 2>&1; then
+        $SUDO systemctl start nginx 2>/dev/null || $SUDO nginx || \
+          echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
+      else
+        $SUDO nginx || echo "注意：Nginx 啟動失敗，請稍後手動檢查 /etc/nginx 配置"
+      fi
     fi
   fi
+
+}
+
+bootstrap_apt_hold() {
+  if command -v apt-mark >/dev/null 2>&1; then
+    $SUDO apt-mark hold nginx || true
+  fi
+}
+
+initialize_resume_state
+
+run_stage "module_A_interactive_and_params" module_A_interactive_and_params
+run_stage "module_C_source_and_deps" module_C_source_and_deps
+run_stage "module_D_build_nginx_and_base_init" module_D_build_nginx_and_base_init
+run_stage "module_E_geoip_cloudflare_init" module_E_geoip_cloudflare_init
+run_stage "module_F_update_geoip_install_and_timer" module_F_update_geoip_install_and_timer
+run_stage "module_H_build_modsecurity_waf" module_H_build_modsecurity_waf
+
+if [ "$SKIP_SYSTEMD" -ne 1 ]; then
+  run_stage "install_nginx_systemd_service" install_nginx_systemd_service
+else
+  log_info ">> SKIP_SYSTEMD=1，略過 systemd 服務建立"
 fi
 
-# =====（apt 系列）鎖定 nginx 避免自動升級 =====
-if command -v apt-mark >/dev/null 2>&1; then
-  $SUDO apt-mark hold nginx || true
-fi
-
-
-
+run_stage "module_I_post_install_tasks" module_I_post_install_tasks
+run_stage "bootstrap_apt_hold" bootstrap_apt_hold
 
 echo ">> 完成！請手動檢查 /etc/nginx 配置，並重啟 Nginx"
 echo ">> 完成後可執行「nginx -t」驗證配置"
