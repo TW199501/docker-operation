@@ -1,0 +1,43 @@
+global_defs {
+    enable_script_security
+    script_user root
+}
+
+vrrp_script chk_nginx {
+    script "/usr/local/sbin/check_nginx.sh"
+    interval 2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_51 {
+    state MASTER           # BACKUP 節點改成 BACKUP
+    interface eth0         # 依實際網卡名稱調整
+    virtual_router_id 51
+    priority 200           # BACKUP 節點請使用較小值
+    advert_int 1
+    garp_master_delay 1
+    garp_master_repeat 5
+
+    unicast_src_ip 192.168.25.10   # 本機 IP
+    unicast_peer {
+        192.168.25.11              # 對端 IP，可多個
+    }
+
+    authentication {
+        auth_type PASS
+        auth_pass 23887711
+    }
+
+    track_script {
+        chk_nginx
+    }
+
+    track_interface {
+        eth0
+    }
+
+    virtual_ipaddress {
+        192.168.25.250/24 dev eth0
+    }
+}
