@@ -5,7 +5,7 @@ NGINX_IMAGE_BASE="tw199501/nginx"
 NGINX_VERSION="1.29.3"
 
 HAPROXY_IMAGE_BASE="tw199501/haproxy"
-HAPROXY_VERSION="trixie"
+HAPROXY_VERSION="3.3.0"
 
 echo "[INFO] Tagging nginx image..."
 docker tag "${NGINX_IMAGE_BASE}:${NGINX_VERSION}" "${NGINX_IMAGE_BASE}:latest"

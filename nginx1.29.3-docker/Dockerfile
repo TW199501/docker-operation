@@ -28,7 +28,7 @@ RUN set -eux; \
 
 WORKDIR /opt/nginx-build
 COPY nginx1.29.3-docker/build-nginx.sh ./build-nginx.sh
-RUN chmod +x ./build-nginx.sh
+RUN sed -i 's/\r$//' ./build-nginx.sh && chmod +x ./build-nginx.sh
 
 RUN set -eux; \
   ./build-nginx.sh; \
@@ -41,10 +41,10 @@ COPY nginx1.29.3-docker/geoip/ip_whitelist.conf /etc/nginx/geoip/ip_whitelist.co
 COPY nginx1.29.3-docker/geoip/ip_blacklist.conf /etc/nginx/geoip/ip_blacklist.conf
 COPY nginx1.29.3-docker/scripts/manage_ip.sh /etc/nginx/scripts/manage_ip.sh
 COPY nginx1.29.3-docker/ssl/ssl.conf /etc/nginx/ssl/ssl.conf
-RUN chmod +x /etc/nginx/scripts/manage_ip.sh
+RUN sed -i 's/\r$//' /etc/nginx/scripts/manage_ip.sh && chmod +x /etc/nginx/scripts/manage_ip.sh
 
-COPY nginx1.29.3-docker/keepalived-install.sh /opt/keepalived-install.sh
-RUN chmod +x /opt/keepalived-install.sh
+COPY nginx1.29.3-docker/scripts/keepalived-install.sh /opt/keepalived-install.sh
+RUN sed -i 's/\r$//' /opt/keepalived-install.sh && chmod +x /opt/keepalived-install.sh
 
 COPY nginx1.29.3-docker/log/logrotate-nginx.conf /etc/logrotate.d/nginx
 
@@ -55,8 +55,8 @@ RUN set -eux; \
   if [ -d /usr/share/GeoIP ]; then cp -a /usr/share/GeoIP/. /opt/seed/geoip/; fi; \
   if [ -d /etc/keepalived ]; then cp -a /etc/keepalived/. /opt/seed/keepalived/; fi
 
-COPY nginx1.29.3-docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY nginx1.29.3-docker/scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 80 443
 STOPSIGNAL SIGQUIT

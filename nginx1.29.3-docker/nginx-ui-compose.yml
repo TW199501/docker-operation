@@ -2,7 +2,7 @@ services:
   nginx-ui:
     image: uozi/nginx-ui:dev
     container_name: nginx-ui
-    restart: always
+    restart: unless-stopped
     networks:
       - nginx-ui-network
     environment:

@@ -15,7 +15,7 @@ services:
     build:
       context: .
       dockerfile: haproxy/Dockerfile
-    image: tw199501/haproxy:trixie
+    image: tw199501/haproxy:3.3.0
     restart: unless-stopped
     depends_on:
       - elf-nginx
