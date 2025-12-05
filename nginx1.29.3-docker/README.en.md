@@ -1,6 +1,6 @@
 # Elf-Nginx Containerized Deployment Solution
 
-## 📖 Project Overview
+> 📚 **Complete documentation available in [`docs/`](docs/) directory**
 
 Elf-Nginx is an enterprise-grade containerized deployment solution based on Nginx 1.29.3. It integrates high availability, security protection, geolocation recognition, and automated operations.
 
@@ -12,26 +12,51 @@ Elf-Nginx is an enterprise-grade containerized deployment solution based on Ngin
 - **Automation**: Scheduled updates of GeoIP databases and Cloudflare configuration.
 - **Modular Design**: Dynamic module loading with flexible configuration management.
 
-## 🏗️ Technical Architecture
+### 🔗 Quick Navigation
 
-### Core Components
+- 📖 [Project Overview](docs/README.en.md) - Basic introduction and feature overview
+- 🚀 [Quick Start](docs/deployment-guide.md#quick-start) - 5-minute deployment guide
+- ⚙️ [Configuration](docs/configuration.md) - Complete configuration guide
+- 🌐 [Network Guide](docs/network-guide.md) - Docker network configuration tutorial
+- 🔧 [Deployment Guide](docs/deployment-guide.md) - Detailed deployment workflow
+- 🐛 [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- 🛠️ [Development Guide](docs/development.md) - Development and maintenance
 
-#### Web Server
+### ⚡ Quick Start
 
-- **Nginx Version**: 1.29.3 (custom compiled)
-- **Base Image**: Debian Bookworm Slim
-- **Build Options**: Full feature set including SSL, HTTP/2, and HTTP/3.
+```bash
+# 1. Build container images
+cd nginx1.29.3-docker
+docker compose -f docker-compose.build.yml build
 
-#### Integrated Third-Party Modules
+# 2. Start services
+docker compose -f docker-compose.build.yml up -d --build
 
-| Module | Description | Version |
-|--------|-------------|---------|
-| ngx_http_geoip2_module | GeoIP2 geolocation | latest |
-| ngx_brotli | Google Brotli compression | latest |
-| headers-more-nginx-module | Custom HTTP headers | latest |
-| ngx_cache_purge | Cache purge | latest |
-| njs | JavaScript support | latest |
-| ModSecurity-nginx | WAF security | v1.0.4 |
+# 3. Check status
+docker compose ps
+```
+
+### 🏗️ Technical Architecture
+
+#### Core Components
+
+| Component | Version | Description |
+|-----------|---------|-------------|
+| Nginx | 1.29.3 | Custom compiled with performance modules |
+| HAProxy | trixie | Load balancing and traffic forwarding |
+| Keepalived | 2.3.4 | High availability failover |
+| ModSecurity | v3 | WAF security protection |
+
+#### Integrated Modules
+
+| Module | Description |
+|--------|-------------|
+| ngx_http_geoip2_module | GeoIP2 geolocation |
+| ngx_brotli | Google Brotli compression |
+| headers-more-nginx-module | Custom HTTP headers |
+| ngx_cache_purge | Cache purge functionality |
+| njs | JavaScript support |
+| ModSecurity-nginx | WAF security |
 
 #### Dependency Versions
 

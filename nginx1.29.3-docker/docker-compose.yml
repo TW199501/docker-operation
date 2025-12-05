@@ -1,4 +1,4 @@
-name: elfnginxhaproxy
+name: elfhaproxy
 services:
   elf-nginx:
     container_name: elf-nginx

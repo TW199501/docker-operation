@@ -1,6 +1,6 @@
 # Elf-Nginx 容器化部署方案
 
-## 📖 專案概述
+> 📚 **完整文檔請查看 [`docs/`](docs/) 目錄**
 
 Elf-Nginx 是一個基於 Nginx 1.29.3 的企業級容器化部署解決方案，整合了高可用性、安全防護、地理位置識別和自動化運維等進階功能。
 
@@ -12,26 +12,51 @@ Elf-Nginx 是一個基於 Nginx 1.29.3 的企業級容器化部署解決方案�
 - **自動化**: 定期更新地理IP資料庫和Cloudflare配置
 - **模組化**: 動態模組載入，靈活配置管理
 
-## 🏗️ 技術架構
+### 🔗 快速導航
 
-### 核心組件
+- 📖 [專案總覽](docs/README.md) - 基本介紹與功能概述
+- 🚀 [快速開始](docs/deployment-guide.md#快速開始) - 5分鐘快速部署
+- ⚙️ [配置詳解](docs/configuration.md) - 完整配置指南
+- 🌐 [網路配置](docs/network-guide.md) - Docker 網路設定教學
+- 🔧 [部署指南](docs/deployment-guide.md) - 詳細部署流程
+- 🐛 [故障排除](docs/troubleshooting.md) - 常見問題與解決方案
+- 🛠️ [開發指南](docs/development.md) - 開發與維護指南
 
-#### Web服務器
+### ⚡ 快速開始
 
-- **Nginx版本**: 1.29.3 (自定義編譯)
-- **基礎映像**: Debian Bookworm Slim
-- **編譯選項**: 完整功能集，包含SSL、HTTP/2、HTTP/3支援
+```bash
+# 1. 構建容器映像
+cd nginx1.29.3-docker
+docker compose -f docker-compose.build.yml build
 
-#### 第三方模組集成
+# 2. 啟動服務
+docker compose -f docker-compose.build.yml up -d --build
 
-| 模組名稱 | 功能描述 | 版本 |
-|---------|---------|------|
-| ngx_http_geoip2_module | GeoIP2地理位置識別 | 最新版 |
-| ngx_brotli | Google Brotli壓縮 | 最新版 |
-| headers-more-nginx-module | HTTP頭部自定義 | 最新版 |
-| ngx_cache_purge | 快取清理功能 | 最新版 |
-| njs | JavaScript支援 | 最新版 |
-| ModSecurity-nginx | WAF安全防護 | v1.0.4 |
+# 3. 查看狀態
+docker compose ps
+```
+
+### 🏗️ 技術架構
+
+#### 核心組件
+
+| 組件 | 版本 | 說明 |
+|------|------|------|
+| Nginx | 1.29.3 | 自定義編譯，整合多個效能模組 |
+| HAProxy | trixie | 負載均衡與流量轉發 |
+| Keepalived | 2.3.4 | 高可用性故障轉移 |
+| ModSecurity | v3 | WAF 安全防護 |
+
+#### 整合模組
+
+| 模組名稱 | 功能描述 |
+|---------|---------|
+| ngx_http_geoip2_module | GeoIP2地理位置識別 |
+| ngx_brotli | Google Brotli壓縮 |
+| headers-more-nginx-module | HTTP頭部自定義 |
+| ngx_cache_purge | 快取清理功能 |
+| njs | JavaScript支援 |
+| ModSecurity-nginx | WAF安全防護 |
 
 #### 依賴庫版本
 
@@ -39,29 +64,6 @@ Elf-Nginx 是一個基於 Nginx 1.29.3 的企業級容器化部署解決方案�
 - **PCRE2**: 10.47
 - **zlib**: 1.3.1
 - **libmaxminddb**: 1.12.2
-
-## 📁 項目結構
-
-```
-nginx1.29.3-docker/
-├── Dockerfile                     # 容器構建配置
-├── docker-compose.yml             # 容器編排配置（elf-nginx + haproxy）
-├── build-nginx.sh                 # Nginx 編譯腳本
-├── 30-keepalived-install.sh       # 實體機 / VM 上安裝 Keepalived 的腳本
-├── keepalived-install.sh          # 精簡版 Keepalived 安裝腳本
-├── docker-entrypoint.sh           # Nginx 容器入口點
-├── nginx/                         # Nginx 配置與資料掛載根目錄
-│   ├── etc/                       # Nginx 配置
-│   ├── modules/                   # 動態模組
-│   ├── logs/                      # 運行日誌
-│   ├── cache/                     # 緩存文件
-│   ├── geoip/                     # GeoIP 資料庫
-│   └── keepalived/                # Keepalived 配置（僅掛載用）
-├── haproxy/
-│   └── haproxy.cfg                # HAProxy 前端配置
-├── README.md                      # 項目說明文檔
-└── todos.md                       # 開發任務清單
-```
 
 ## 🔧 配置詳解
 
