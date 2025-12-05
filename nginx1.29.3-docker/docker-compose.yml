@@ -2,38 +2,16 @@ name: elfnginxhaproxy
 services:
   elf-nginx:
     container_name: elf-nginx
-    image: tw199501/elf-nginx:1.29.3
+    image: tw199501/nginx:1.29.3
     restart: unless-stopped
     environment:
       - TZ=Asia/Taipei
     volumes:
-      - ./nginx/etc:/etc/nginx
-      - ./nginx/modules:/usr/lib/nginx/modules
-      - ./nginx/logs:/var/log/nginx
-      - ./nginx/cache:/var/cache/nginx
-      - ./nginx/geoip:/usr/share/GeoIP
-      - ./scripts:/opt/keepalived
+      - /opt/nginx-stack/nginx:/etc/nginx
+      - /opt/nginx-stack/nginx-logs:/var/log/nginx
     networks:
       - elf-internal
 
-
-name: haprox
-services:
-  elf-nginx:
-    container_name: elf-nginx
-    image: tw199501/elf-nginx:1.29.3
-    restart: unless-stopped
-    environment:
-      - TZ=Asia/Taipei
-    volumes:
-      - ./nginx/etc:/etc/nginx
-      - ./nginx/modules:/usr/lib/nginx/modules
-      - ./nginx/logs:/var/log/nginx
-      - ./nginx/cache:/var/cache/nginx
-      - ./nginx/geoip:/usr/share/GeoIP
-      - ./keepalived:/opt/keepalived
-    networks:
-      - elf-internal
   haproxy:
     container_name: haproxy
     image: tw199501/haproxy:trixie
@@ -44,9 +22,8 @@ services:
       - "80:80"
       - "443:443"
       - "8404:8404"
-
     volumes:
-      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     networks:
       - elf-internal
 

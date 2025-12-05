@@ -8,6 +8,8 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Taipei
+    volumes:
+      - /opt/nginx-stack/nginx:/etc/nginx
   haproxy:
     container_name: haproxy
     build:

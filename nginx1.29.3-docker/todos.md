@@ -29,3 +29,12 @@
 
 [x ] 增加構建驗證和完整性檢查
 說明：添加構建後驗證測試、模組載入檢查、安全掃描、版本一致性驗證。
+
+[x] 設計 elf-nginx + haproxy 與 nginx-ui 的共用配置架構（方案B）
+說明：決定主機 /etc/nginx 目錄與容器掛載路徑，畫出資料流。
+
+[x] 在 docker-compose.build.yml 為 elf-nginx 加上 /etc/nginx 的共用 volume
+說明：將同一主機目錄掛載到 elf-nginx 的 /etc/nginx。
+
+[x] 在 nginx-ui-compose.yml 與 elf-nginx 共用同一組 /etc/nginx 設定目錄
+說明：使用與 elf-nginx 相同主機目錄掛載 /etc/nginx，並保留 /etc/nginx-ui 資料目錄。

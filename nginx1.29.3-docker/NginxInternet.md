@@ -235,3 +235,24 @@ networks:
 - `host.docker.internal`：容器打宿主機。
 
 如果你接下來告訴我「nginxWebUI 會跑在宿主機 / 另一個 compose / 另一台 VM 哪一種」，我可以直接幫你畫一個**專屬拓樸 + network / IP 寫法**給你抄。
+
+我先把「設計方案B架構」這個 TODO 標成完成，然後用極短文字說明架構與路徑，先不改任何 compose 檔，等你下一步指示再動。
+
+# 方案B 共用架構設計（已完成「設計」這一步）
+
+- **設定目錄共用**
+
+  - 宿主：`/opt/nginx-stack/nginx`
+  - `elf-nginx`：掛載成 `/etc/nginx`
+  - `nginx-ui`：同樣掛載成 `/etc/nginx`（`NGINX_UI_NGINX_CONFIG_DIR=/etc/nginx` 不變）
+- **UI 自己的資料**
+
+  - 宿主：`/opt/nginx-stack/nginx-ui`
+  - `nginx-ui`：掛載成 `/etc/nginx-ui`
+- **流量路徑**
+
+  - 使用者 → `haproxy`（host 80/443）→ `elf-nginx:80`
+  - `nginx-ui` 只跑管理介面：`http://<host>:8080` / `https://<host>:8443`
+    不直接吃正式 80/443 流量，只改 `/opt/nginx-stack/nginx` 裡的設定檔供 `elf-nginx` 使用。
+
+如果你同意這個架構，下一步我再幫你「修改兩個 compose 的 volumes」。

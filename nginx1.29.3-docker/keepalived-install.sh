@@ -44,8 +44,8 @@ LOCAL_IP="${LOCAL_CIDR%/*}"
 [ -n "$LOCAL_IP" ] || die "無法取得 $IFACE 的 IPv4"
 
 if [ -z "${VRID:-}" ]; then
-  read -rp "Virtual Router ID (1-255, 預設 51): " VRID
-  VRID="${VRID:-51}"
+  read -rp "Virtual Router ID (1-255, 預設 60): " VRID
+  VRID="${VRID:-60}"
 fi
 [[ "$VRID" =~ ^[0-9]+$ ]] || die "VRID 必須是數字"
 (( VRID>=1 && VRID<=255 )) || die "VRID 範圍 1..255"
@@ -59,6 +59,17 @@ if [[ "$VIP_CIDR" != */* ]]; then
   VIP_CIDR="$VIP_CIDR/$PREFIX"
 fi
 VIP_IP="${VIP_CIDR%/*}"
+
+if [ "$ROLE" = "MASTER" ] && command -v ping >/dev/null 2>&1; then
+  if ping -c1 -W1 "$VIP_IP" >/dev/null 2>&1; then
+    warn "偵測到 VIP $VIP_IP 已可連線，可能已有其他 MASTER 在運行。"
+    read -rp "仍要以 MASTER 安裝？[y/N]: " ans
+    case "${ans:-N}" in
+      y|Y) ;;
+      *) die "請改用 ROLE=BACKUP 或先停止現有 MASTER 後再執行";;
+    esac
+  fi
+fi
 
 # 優先權
 if [ -z "${PRIORITY:-}" ]; then
@@ -77,6 +88,34 @@ if [ -z "${PEER_IP:-}" ]; then
   read -rp "對端實體 IP（單播 unicast，用於 unicast_peer；可先填未上線的對端）: " PEER_IP
 fi
 [[ "$PEER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "PEER_IP 應是 IPv4 位址"
+
+# 嘗試確認 PEER_IP 是否與本機在同一網段（最佳努力檢查）
+if command -v ipcalc >/dev/null 2>&1; then
+  LOCAL_NET=$(ipcalc -n "$LOCAL_CIDR" | awk '/Network/{print $2}')
+  PEER_NET=$(ipcalc -n "$PEER_IP/${LOCAL_CIDR#*/}" | awk '/Network/{print $2}')
+  if [ "$LOCAL_NET" != "$PEER_NET" ]; then
+    warn "PEER_IP ($PEER_IP) 與本機 $LOCAL_CIDR 不在同一網段（$LOCAL_NET vs $PEER_NET）"
+    read -rp "仍然繼續？[y/N]: " ans
+    case "${ans:-N}" in
+      y|Y) ;;
+      *) die "請修正 PEER_IP 或網段後再執行";;
+    esac
+  fi
+else
+  PREFIX_CHECK="${LOCAL_CIDR#*/}"
+  if [ "$PREFIX_CHECK" = "24" ]; then
+    LOCAL_NET_24="${LOCAL_IP%.*}"
+    PEER_NET_24="${PEER_IP%.*}"
+    if [ "$LOCAL_NET_24" != "$PEER_NET_24" ]; then
+      warn "PEER_IP ($PEER_IP) 可能不在與本機 $LOCAL_IP/$PREFIX_CHECK 相同的 /24 網段"
+      read -rp "仍然繼續？[y/N]: " ans
+      case "${ans:-N}" in
+        y|Y) ;;
+        *) die "請修正 PEER_IP 後再執行";;
+      esac
+    fi
+  fi
+fi
 
 msg "[1/6] 安裝建置相依與工具"
 if command -v apt-get >/dev/null 2>&1; then
@@ -160,6 +199,7 @@ cat > "$CONF" <<EOF
 global_defs {
     enable_script_security
     script_user root
+    log_file /var/log/keepalived/keepalived.log
 }
 
 vrrp_script chk_nginx {
@@ -195,10 +235,6 @@ vrrp_instance VI_${VRID} {
         chk_nginx
     }
 
-    track_interface {
-        ${IFACE}
-    }
-
     virtual_ipaddress {
         ${VIP_CIDR} dev ${IFACE}
     }
@@ -207,6 +243,21 @@ EOF
 
 # 檢查語法
 keepalived -t -f "$CONF" || die "keepalived.conf 語法錯誤"
+
+if command -v logrotate >/dev/null 2>&1; then
+  install -d -m 0755 /var/log/keepalived
+  cat > /etc/logrotate.d/keepalived <<'LOG'
+/var/log/keepalived/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+}
+LOG
+fi
 
 msg "[5/6] UFW 規則（若已啟用 UFW：放行 VRRP、可選放行 80/443）"
 if command -v ufw >/dev/null 2>&1; then

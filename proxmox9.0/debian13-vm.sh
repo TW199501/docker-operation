@@ -18,7 +18,7 @@ METHOD=""
 NSAPP="docker-vm"
 var_os="debian"
 var_version="13"
-DISK_SIZE="10G"
+DISK_SIZE="30G"
 
 YW=$(echo "\033[33m")
 BL=$(echo "\033[36m")
@@ -57,8 +57,6 @@ THIN="discard=on,ssd=1,"
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
-#trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
-#trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
 function error_handler() {
   local exit_code="$?"
   local line_number="$1"
@@ -613,7 +611,7 @@ msg_info "Downloading to: $(pwd)/$FILE"
 
 if curl -f#SL -o "$FILE" "$URL"; then
   echo -en "\e[1A\e[0K"
-  
+
   # Verify the downloaded file
   if [ -f "$FILE" ] && [ -s "$FILE" ]; then
     FILE_SIZE=$(du -h "$FILE" | cut -f1)
@@ -770,13 +768,13 @@ fi
 # Install Node Exporter if requested
 if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
   msg_info "Adding Prometheus Node Exporter to Debian 13 Qcow2 Disk Image"
-  
+
   # Download and install Node Exporter
   virt-customize -q -a "${FILE}" --run-command "useradd --no-create-home --shell /bin/false node_exporter" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "curl -fsSL https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -o /tmp/node_exporter.tar.gz" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "tar -xzf /tmp/node_exporter.tar.gz -C /tmp && mv /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/ && rm -rf /tmp/node_exporter*" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "chown node_exporter:node_exporter /usr/local/bin/node_exporter" >/dev/null
-  
+
   # Create systemd service file
   virt-customize -q -a "${FILE}" --run-command "cat > /etc/systemd/system/node_exporter.service << 'EOF'
 [Unit]
@@ -794,7 +792,7 @@ ExecStart=/usr/local/bin/node_exporter
 WantedBy=multi-user.target
 EOF" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable node_exporter" >/dev/null
-  
+
   msg_ok "Added Prometheus Node Exporter to Debian 13 Qcow2 Disk Image successfully"
   msg_info "Node Exporter will be available on port 9100"
 fi

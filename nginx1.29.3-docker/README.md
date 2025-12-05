@@ -265,39 +265,85 @@ RandomizedDelaySec=5min
 - **系統資源**: 最低2GB RAM, 4GB磁碟空間
 - **網路**: 支持80/443端口映射
 
-### 快速部署
+### 快速部署（本機開發環境）
 
 #### 1. 構建容器映像
 
 ```bash
-# 清理 Docker 緩存
-docker builder prune -f
+# 在專案根目錄（包含 nginx1.29.3-docker）執行
+docker builder prune -f    # 可選：清理 builder 快取
 
-# 在 nginx1.29.3-docker 目錄中構建 nginx 映像
-docker build -t elf-nginx:latest -f Dockerfile ..
+cd nginx1.29.3-docker
+docker compose -f docker-compose.build.yml build
 ```
 
-#### 2. 啟動服務
+#### 2. 啟動本機服務（測試用）
 
 ```bash
-# 在 nginx1.29.3-docker 目錄中建立本機掛載目錄
-mkdir -p nginx/{etc,modules,logs,cache,geoip,keepalived}
-
-# 啟動服務（elf-nginx + haproxy）
-docker compose up -d
+# 使用 build 版 compose 啟動 elf-nginx + haproxy
+docker compose -f docker-compose.build.yml up -d --build
 ```
 
-#### 3. 驗證部署
+#### 3. 推送映像到 Docker Hub
 
 ```bash
-# 檢查容器狀態
-docker-compose ps
+docker login
+docker push tw199501/nginx:1.29.3
+docker push tw199501/haproxy:trixie
+```
 
-# 查看服務日誌
-docker-compose logs -f elf-nginx
+### 跨主機部署（VM / 實體機）
 
-# 測試nginx響應
-curl -I http://localhost
+#### 1. 準備目標主機目錄
+
+```bash
+sudo mkdir -p /opt/nginx-stack/nginx
+sudo mkdir -p /opt/nginx-stack/nginx-ui
+```
+
+#### 2. 在目標主機拉取映像
+
+```bash
+docker pull tw199501/nginx:1.29.3
+docker pull tw199501/haproxy:trixie
+```
+
+#### 3. 使用 Compose 啟動服務
+
+> 將發佈用的 `docker-compose.yml` 與 `nginx-ui-compose.yml` 複製到目標主機同一目錄。
+
+```bash
+docker compose -f docker-compose.yml up -d
+docker compose -f nginx-ui-compose.yml up -d
+```
+
+#### 4. 使用 Nginx UI 管理設定（方案B）
+
+```text
+流量路徑: Client -> haproxy(80/443) -> elf-nginx:80
+配置路徑: /opt/nginx-stack/nginx <-> elf-nginx:/etc/nginx
+          /opt/nginx-stack/nginx <-> nginx-ui:/etc/nginx
+          /opt/nginx-stack/nginx-ui <-> nginx-ui:/etc/nginx-ui
+```
+
+首次登入 Nginx UI：`http://<host>:8080` 或 `https://<host>:8443`。
+
+Nginx UI 中對應 `elf-nginx` 的建議設定：
+
+- ContainerName：`elf-nginx`
+- ConfigDir：`/etc/nginx`
+- PIDPath：`/run/nginx.pid`
+- SbinPath：`/usr/sbin/nginx`
+- TestConfigCmd：`nginx -t`
+- AccessLogPath：`/var/log/nginx/access.log`
+- ErrorLogPath：`/var/log/nginx/error.log`
+- LogDirWhiteList：`/var/log/nginx`
+
+上述設定完成後，Nginx UI 在後台執行語法檢查與重載時，等同於：
+
+```bash
+docker exec elf-nginx nginx -t
+docker exec elf-nginx nginx -s reload
 ```
 
 ### 高可用部署

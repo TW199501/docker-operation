@@ -17,13 +17,11 @@ services:
       - 9168:9860
     volumes:
       #- /opt/nginx-ui/nginx-configs:/etc/nginx/sites-available
-      - /opt/nginx-ui/nginx-ui-data:/etc/nginx-ui # 只留「一個」資料目錄掛載
-      - /opt/nginx-ui/logs:/var/log/nginx
+      - /opt/nginx-stack/nginx:/etc/nginx
+      - /opt/nginx-stack/nginx-ui:/etc/nginx-ui # 只留「一個」資料目錄掛載
+      - /opt/nginx-stack/nginx-logs:/var/log/nginx
       - /opt/nginx-ui/run:/var/run
       - /etc/localtime:/etc/localtime:ro
-      - /etc/nginx/geoip:/etc/nginx/geoip
-      - /etc/nginx/conf.d:/etc/nginx/conf.d
-      - /etc/nginx/ssl:/etc/nginx/ssl
       - /var/run/docker.sock:/var/run/docker.sock
 networks:
   nginx-ui-network:

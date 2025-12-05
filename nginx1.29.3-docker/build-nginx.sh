@@ -375,7 +375,7 @@ $SUDO rm -f "$MODULES_CONF"
 {
   for so in "${MODULES[@]}"; do
     if [ -f "/usr/lib/nginx/modules/$so" ]; then
-      echo "# load_module /usr/lib/nginx/modules/$so;"
+      echo "load_module /usr/lib/nginx/modules/$so;"
     fi
   done
 } | $SUDO tee "$MODULES_CONF" >/dev/null
