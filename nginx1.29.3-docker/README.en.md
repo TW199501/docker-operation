@@ -4,7 +4,7 @@
 
 Elf-Nginx is an enterprise-grade containerized deployment solution based on Nginx 1.29.3. It integrates high availability, security protection, geolocation recognition, and automated operations.
 
-### 🚀 Key Features
+## 🚀 Key Features
 
 - **High Performance**: Custom-compiled from source with multiple performance-oriented modules.
 - **High Availability**: Keepalived-based active/standby failover.

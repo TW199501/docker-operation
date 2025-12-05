@@ -16,7 +16,6 @@ $ErrorActionPreference = "Stop"
 
 # Get script directory
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$ProjectRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 
 # Image base names
 $nginxImageBase = "tw199501/nginx"

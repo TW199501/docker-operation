@@ -10,13 +10,15 @@
 
 打開 VS Code，安裝以下推薦擴展：
 
-#### 必裝擴展：
+#### 必裝擴展
+
 - **ShellCheck** (`timonwong.shellcheck`) - Shell 腳本靜態分析
 - **Bash Debug** (`rogalmic.bash-debug`) - 調試 Shell 腳本
 - **Docker** (`ms-azuretools.vscode-docker`) - Docker 工具支持
 - **YAML** (`redhat.vscode-yaml`) - YAML 語言支持
 
-#### 推薦擴展：
+#### 推薦擴展
+
 - **GitLens** (`eamodio.gitlens`) - 增強 Git 功能
 - **Test Explorer** (`hbenl.vscode-test-explorer`) - 測試管理
 - **Prettier** (`esbenp.prettier-vscode`) - 代碼格式化
@@ -24,6 +26,7 @@
 ### 2. 重新載入 VS Code
 
 安裝擴展後，重新載入 VS Code 以應用配置：
+
 - `Ctrl+Shift+P` → "Developer: Reload Window"
 
 ## 🎯 使用測試功能
@@ -85,11 +88,13 @@
 ### tasks.json 任務配置
 
 #### 測試任務
+
 - **運行所有測試**: `cd tests && bash run_all_tests.sh all`
 - **運行單元測試**: `cd tests && bash run_all_tests.sh unit`
 - **驗證 Docker Compose**: 檢查所有 compose 文件語法
 
 #### 構建任務
+
 - **檢查 Shell 語法**: 使用 `bash -n` 檢查語法
 - **運行 ShellCheck**: 靜態代碼分析
 - **清理測試環境**: 刪除測試臨時文件
@@ -97,6 +102,7 @@
 ### launch.json 調試配置
 
 #### 測試腳本調試
+
 ```json
 {
   "name": "調試測試腳本 (所有測試)",
@@ -108,6 +114,7 @@
 ```
 
 #### Shell 腳本調試
+
 ```json
 {
   "name": "調試單個 Shell 腳本",
@@ -120,17 +127,22 @@
 ## 📊 測試結果查看
 
 ### 終端面板
+
 測試運行時的詳細輸出會顯示在終端面板中。
 
 ### 問題面板
+
 測試錯誤會自動顯示在問題面板中：
+
 - 🔴 **錯誤**: 必須修復的問題
 - 🟡 **警告**: 建議修復的問題
 - ℹ️ **信息**: 一般信息
 
 ### 測試總結
+
 每次測試運行後會顯示摘要：
-```
+
+```text
 測試腳本 / Test Scripts    : 8
 失敗項目 / Failed Items    : 0
 跳過項目 / Skipped Items   : 2
@@ -142,6 +154,7 @@
 ### 常見問題
 
 #### 1. ShellCheck 不工作
+
 ```bash
 # 檢查擴展是否安裝
 code --list-extensions | grep shellcheck
@@ -151,6 +164,7 @@ code --install-extension timonwong.shellcheck
 ```
 
 #### 2. Bash Debug 不工作
+
 ```bash
 # 安裝 bashdb
 # Ubuntu/Debian:
@@ -161,6 +175,7 @@ sudo yum install bashdb
 ```
 
 #### 3. 測試任務失敗
+
 ```bash
 # 檢查權限
 chmod +x tests/*.sh
@@ -170,6 +185,7 @@ which bash docker-compose shellcheck
 ```
 
 #### 4. Docker 命令不可用
+
 ```bash
 # 檢查 Docker 服務
 sudo systemctl status docker
@@ -181,12 +197,14 @@ sudo usermod -aG docker $USER
 ### 調試技巧
 
 #### 查看詳細日誌
+
 ```bash
 # 在 VS Code 中設置
 "testExplorer.logLevel": "verbose"
 ```
 
 #### 手動運行測試
+
 ```bash
 # 直接在終端運行
 cd tests
@@ -198,6 +216,7 @@ bash run_all_tests.sh -v all
 ### 添加新的測試任務
 
 編輯 `.vscode/tasks.json`:
+
 ```json
 {
   "label": "我的自定義測試",
@@ -211,6 +230,7 @@ bash run_all_tests.sh -v all
 ### 添加新的快捷鍵
 
 編輯 `.vscode/keybindings.json`:
+
 ```json
 {
   "key": "ctrl+shift+m",
@@ -222,6 +242,7 @@ bash run_all_tests.sh -v all
 ### 自定義測試配置
 
 編輯 `tests/test-config.ini`:
+
 ```ini
 [tests]
 unit_tests = true
@@ -248,7 +269,7 @@ test_timeout = 300
 3. 檢查我們的測試文檔：`tests/README.md`
 4. 查看 GitHub Issues 中的已知問題
 
-## 🎉 完成設置！
+## 🎉 完成設置
 
 現在您已經擁有了完整的 VS Code 測試和開發環境，可以：
 
