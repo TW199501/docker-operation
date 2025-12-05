@@ -475,6 +475,10 @@ function advanced_settings() {
       # Static IP
       if CI_IP=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set static IP address (e.g., 192.168.1.100/24)" 8 58 --title "STATIC IP" --cancel-button Skip 3>&1 1>&2 2>&3); then
         if [ -n "$CI_IP" ]; then
+          # Ensure subnet mask is included
+          if [[ "$CI_IP" != */* ]]; then
+            CI_IP="${CI_IP}/24"
+          fi
           # Gateway
           if CI_GW=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set gateway address" 8 58 --title "GATEWAY" --cancel-button Skip 3>&1 1>&2 2>&3); then
             if [ -n "$CI_GW" ]; then
@@ -710,7 +714,7 @@ export https_proxy="${https_proxy:-}"
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-  virt-customize -q -a "${FILE}" --run-command "sed -i 's|deb.debian.org|ftp.tw.debian.org|g' /etc/apt/sources.list" >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "sed -i 's|deb.debian.org|ftp.tw.debian.org|g' /etc/apt/mirrors/debian.list /etc/apt/mirrors/debian-security.list" >/dev/null &&
   virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
@@ -738,7 +742,7 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
 else
   msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
   # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
-  virt-customize -q -a "${FILE}" --run-command "sed -i 's|deb.debian.org|ftp.tw.debian.org|g' /etc/apt/sources.list" >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "sed -i 's|deb.debian.org|ftp.tw.debian.org|g' /etc/apt/mirrors/debian.list /etc/apt/mirrors/debian-security.list" >/dev/null &&
   if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
