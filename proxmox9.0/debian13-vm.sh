@@ -824,6 +824,13 @@ msg_info "Setting up network for virt-customize..."
 export http_proxy="${http_proxy:-}"
 export https_proxy="${https_proxy:-}"
 
+# Use a dedicated resolv.conf for virt-customize to avoid host DNS quirks
+VIRT_RESOLV_CONF="${TEMP_DIR:-/tmp}/virt-resolv.conf"
+cat << 'EOF' >"$VIRT_RESOLV_CONF"
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+EOF
+
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
 
@@ -831,7 +838,7 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
   export LIBGUESTFS_BACKEND_SETTINGS=timeout=600
 
   # 先安裝基本套件
-  if virt-customize -q -a "${FILE}" --copy-in /etc/resolv.conf:/etc --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null; then
+  if virt-customize -q -a "${FILE}" --copy-in "$VIRT_RESOLV_CONF":/etc --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null; then
     # 嘗試添加 Docker 存儲庫和安裝 Docker
     DOCKER_INSTALL_SUCCESS=false
 
@@ -901,7 +908,7 @@ else
   msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
   # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
   # Mirror is already deb.debian.org in the image, no need to change
-  if virt-customize -q -a "${FILE}" --copy-in /etc/resolv.conf:/etc --install qemu-guest-agent,cloud-init,openssh-server >/dev/null 2>&1; then
+  if virt-customize -q -a "${FILE}" --copy-in "$VIRT_RESOLV_CONF":/etc --install qemu-guest-agent,cloud-init,openssh-server >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\\nUseDNS no\\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
