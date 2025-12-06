@@ -90,11 +90,11 @@ function set_root_password() {
 
   while true; do
     # 輸入密碼
-    read -s -p "請輸入 root 用戶的新密碼: " ROOT_PASSWORD
+    read -rs -p "請輸入 root 用戶的新密碼: " ROOT_PASSWORD
     echo
 
     # 確認密碼
-    read -s -p "請再次輸入密碼以確認: " ROOT_PASSWORD_CONFIRM
+    read -rs -p "請再次輸入密碼以確認: " ROOT_PASSWORD_CONFIRM
     echo
 
     # 檢查密碼是否匹配
@@ -186,7 +186,7 @@ function configure_static_ip() {
   msg_info "正在配置固定IP地址..."
 
   # 詢問是否同時禁用 IPv6
-  read -p "是否在配置固定IP時禁用 IPv6? (y/N): " DISABLE_IPV6
+  read -r -p "是否在配置固定IP時禁用 IPv6? (y/N): " DISABLE_IPV6
   if [[ "$DISABLE_IPV6" =~ ^[Yy]$ ]]; then
     disable_ipv6
   fi
@@ -203,7 +203,7 @@ function configure_static_ip() {
 
   # 輸入固定IP地址
   while true; do
-    read -p "請輸入固定IP地址 (例如: 192.168.1.100): " STATIC_IP
+    read -r -p "請輸入固定IP地址 (例如: 192.168.1.100): " STATIC_IP
     if [ -n "$STATIC_IP" ]; then
       # 驗證IP地址格式
       if [[ $STATIC_IP =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
@@ -226,7 +226,7 @@ function configure_static_ip() {
   CURRENT_GATEWAY=$(ip route | grep default | awk '{print $3}' | head -1)
   if [ -n "$CURRENT_GATEWAY" ]; then
     msg_info "檢測到當前網關: $CURRENT_GATEWAY"
-    read -p "是否使用此網關? (Y/n): " USE_DETECTED_GATEWAY
+    read -r -p "是否使用此網關? (Y/n): " USE_DETECTED_GATEWAY
     if [[ "$USE_DETECTED_GATEWAY" =~ ^[Nn]$ ]]; then
       CURRENT_GATEWAY=""
     fi
@@ -235,7 +235,7 @@ function configure_static_ip() {
   # 如果沒有檢測到網關或用戶選擇不使用，讓用戶手動輸入
   if [ -z "$CURRENT_GATEWAY" ]; then
     while true; do
-      read -p "請輸入網關地址 (例如: 192.168.25.254): " GATEWAY
+      read -r -p "請輸入網關地址 (例如: 192.168.25.254): " GATEWAY
       if [ -n "$GATEWAY" ]; then
         # 驗證網關IP地址格式
         if [[ $GATEWAY =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
@@ -375,7 +375,8 @@ EOF
 
   # 驗證配置
   msg_info "驗證網路配置..."
-  local new_ip=$(ip addr show $INTERFACE | grep -oP 'inet \K[\d.]+' | head -1)
+  local new_ip
+  new_ip=$(ip addr show "$INTERFACE" | grep -oP 'inet \K[\d.]+' | head -1)
 
   if [ "$new_ip" = "$STATIC_IP" ]; then
     msg_ok "✓ IP地址配置成功: $STATIC_IP"
@@ -448,10 +449,11 @@ function expand_disk() {
   msg_info "文件系統: $fstype"
 
   # 檢查可用空間
-  local disk_info=$(df -BG / | tail -1)
-  local total_space=$(echo "$disk_info" | awk '{print $2}' | sed 's/G//')
-  local used_space=$(echo "$disk_info" | awk '{print $3}' | sed 's/G//')
-  local avail_space=$(echo "$disk_info" | awk '{print $4}' | sed 's/G//')
+  local disk_info total_space used_space avail_space
+  disk_info=$(df -BG / | tail -1)
+  total_space=$(echo "$disk_info" | awk '{print $2}' | sed 's/G//')
+  used_space=$(echo "$disk_info" | awk '{print $3}' | sed 's/G//')
+  avail_space=$(echo "$disk_info" | awk '{print $4}' | sed 's/G//')
 
   msg_info "總空間: ${total_space}GB, 已用: ${used_space}GB, 可用: ${avail_space}GB"
 
@@ -460,7 +462,8 @@ function expand_disk() {
 
   if [[ "$rootdev" =~ ^/dev/mapper/.+ ]]; then
     # LVM 檢查
-    local vg_free=$(vgs --noheadings -o vg_free --units G 2>/dev/null | awk '{print $1}' | sed 's/G//' | head -1)
+    local vg_free
+    vg_free=$(vgs --noheadings -o vg_free --units G 2>/dev/null | awk '{print $1}' | sed 's/G//' | head -1)
     if [ -n "$vg_free" ] && [ "$(echo "$vg_free > 0" | bc 2>/dev/null)" = "1" ]; then
       has_free_space=true
       msg_info "LVM VG 可用空間: ${vg_free}GB"
@@ -478,8 +481,9 @@ function expand_disk() {
 
     if [ -n "${disk:-}" ]; then
       # 檢查磁碟總大小和分區大小
-      local disk_size=$(lsblk -b -n -o SIZE "$disk" 2>/dev/null | head -1)
-      local part_size=$(lsblk -b -n -o SIZE "$rootdev" 2>/dev/null)
+      local disk_size part_size
+      disk_size=$(lsblk -b -n -o SIZE "$disk" 2>/dev/null | head -1)
+      part_size=$(lsblk -b -n -o SIZE "$rootdev" 2>/dev/null)
 
       if [ -n "$disk_size" ] && [ -n "$part_size" ] && [ "$disk_size" -gt "$part_size" ]; then
         local unused_space=$(( (disk_size - part_size) / 1024 / 1024 / 1024 )) # GB
@@ -671,7 +675,7 @@ function main() {
 
   # 詢問是否設置密碼
   echo -e "\n${YW}${BOLD}1. 設置 root 密碼${CL}"
-  read -p "是否要設置 root 密碼? (y/N): " SET_PASSWORD
+  read -r -p "是否要設置 root 密碼? (y/N): " SET_PASSWORD
 
   if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
     set_root_password
@@ -682,7 +686,7 @@ function main() {
 
   # 詢問是否配置固定IP
   echo -e "\n${YW}${BOLD}2. 配置固定IP地址${CL}"
-  read -p "是否要配置固定IP地址? (y/N): " CONFIG_STATIC_IP
+  read -r -p "是否要配置固定IP地址? (y/N): " CONFIG_STATIC_IP
 
   if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
     configure_static_ip
@@ -695,7 +699,7 @@ function main() {
   if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
     msg_info "IPv6 已在配置固定IP時處理"
   else
-    read -p "是否要禁用 IPv6? (y/N): " DISABLE_IPV6_SEPARATE
+    read -r -p "是否要禁用 IPv6? (y/N): " DISABLE_IPV6_SEPARATE
     if [[ "$DISABLE_IPV6_SEPARATE" =~ ^[Yy]$ ]]; then
       disable_ipv6
     else
@@ -705,7 +709,7 @@ function main() {
 
   # 詢問是否優化大文件處理
   echo -e "\n${YW}${BOLD}4. 優化大文件處理${CL}"
-  read -p "是否要優化系統以更好地處理大文件? (y/N): " OPTIMIZE_LARGE_FILES
+  read -r -p "是否要優化系統以更好地處理大文件? (y/N): " OPTIMIZE_LARGE_FILES
 
   if [[ "$OPTIMIZE_LARGE_FILES" =~ ^[Yy]$ ]]; then
     optimize_for_large_files
@@ -715,7 +719,7 @@ function main() {
 
   # 詢問是否擴展硬碟
   echo -e "\n${YW}${BOLD}5. 擴展硬碟空間${CL}"
-  read -p "是否要擴展硬碟空間? (y/N): " EXPAND_DISK
+  read -r -p "是否要擴展硬碟空間? (y/N): " EXPAND_DISK
 
   if [[ "$EXPAND_DISK" =~ ^[Yy]$ ]]; then
     expand_disk
@@ -725,7 +729,7 @@ function main() {
 
   # 詢問是否優化網路傳輸
   echo -e "\n${YW}${BOLD}6. 優化網路傳輸${CL}"
-  read -p "是否要優化網路傳輸參數 (BBR, socket buffer 等)? (y/N): " OPTIMIZE_NETWORK
+  read -r -p "是否要優化網路傳輸參數 (BBR, socket buffer 等)? (y/N): " OPTIMIZE_NETWORK
 
   if [[ "$OPTIMIZE_NETWORK" =~ ^[Yy]$ ]]; then
     optimize_network_stack
