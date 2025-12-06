@@ -149,7 +149,7 @@ EOF
   # 創建 .kube 目錄
   mkdir -p $HOME/.kube
   cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-  chown $(id -u):$(id -g) "$HOME/.kube/config"
+  chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 
   echo_green "Kubernetes Master 節點初始化完成"
   echo_yellow "請保存以下命令用於添加 Worker 節點："

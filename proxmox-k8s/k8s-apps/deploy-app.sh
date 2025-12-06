@@ -211,33 +211,33 @@ main() {
 
   while true; do
     show_menu
-    read -p "請選擇操作 [1-6]: " choice
+    read -r -p "請選擇操作 [1-6]: " choice
 
     case $choice in
       1)
         deploy_nginx
         echo ""
-        read -p "按回車鍵繼續..."
+        read -r -p "按回車鍵繼續..."
         ;;
       2)
         deploy_mysql
         echo ""
-        read -p "按回車鍵繼續..."
+        read -r -p "按回車鍵繼續..."
         ;;
       3)
         deploy_wordpress
         echo ""
-        read -p "按回車鍵繼續..."
+        read -r -p "按回車鍵繼續..."
         ;;
       4)
         deploy_monitoring
         echo ""
-        read -p "按回車鍵繼續..."
+        read -r -p "按回車鍵繼續..."
         ;;
       5)
         show_app_status
         echo ""
-        read -p "按回車鍵繼續..."
+        read -r -p "按回車鍵繼續..."
         ;;
       6)
         echo_green "退出應用部署腳本"
@@ -245,7 +245,7 @@ main() {
         ;;
       *)
         echo_red "無效選擇，請重新輸入"
-        read -p "按回車鍵繼續..."
+        read -r -p "按回車鍵繼續..."
         ;;
     esac
   done

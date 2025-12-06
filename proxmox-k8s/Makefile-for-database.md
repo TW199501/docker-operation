@@ -11,16 +11,17 @@ Makefile 不僅適用於程式碼編譯項目，在 T-SQL 資料庫專案中同�
 ```makefile
 # 自動部署資料庫結構
 deploy-schema:
-	sqlcmd -S server -d database -i schema/tables.sql
-	sqlcmd -S server -d database -i schema/views.sql
-	sqlcmd -S server -d database -i schema/stored-procedures.sql
+ sqlcmd -S server -d database -i schema/tables.sql
+ sqlcmd -S server -d database -i schema/views.sql
+ sqlcmd -S server -d database -i schema/stored-procedures.sql
 
 # 部署測試數據
 deploy-test-data:
-	sqlcmd -S server -d database -i data/test-data.sql
+ sqlcmd -S server -d database -i data/test-data.sql
 ```
 
 **好處**：
+
 - 一鍵部署整個資料庫環境
 - 確保部署順序正確
 - 減少手動執行錯誤
@@ -30,14 +31,15 @@ deploy-test-data:
 ```makefile
 # 資料庫遷移
 migrate:
-	sqlcmd -S server -d database -i migrations/$(VERSION).sql
+ sqlcmd -S server -d database -i migrations/$(VERSION).sql
 
 # 回滾遷移
 rollback:
-	sqlcmd -S server -d database -i migrations/$(VERSION)_rollback.sql
+ sqlcmd -S server -d database -i migrations/$(VERSION)_rollback.sql
 ```
 
 **好處**：
+
 - 標準化的遷移流程
 - 易於版本控制
 - 支持回滾操作
@@ -47,17 +49,18 @@ rollback:
 ```makefile
 # 執行單元測試
 test:
-	sqlcmd -S server -d test_database -i tests/setup.sql
-	sqlcmd -S server -d test_database -i src/procedures.sql
-	sqlcmd -S server -d test_database -i tests/unit-tests.sql
-	sqlcmd -S server -d test_database -i tests/cleanup.sql
+ sqlcmd -S server -d test_database -i tests/setup.sql
+ sqlcmd -S server -d test_database -i src/procedures.sql
+ sqlcmd -S server -d test_database -i tests/unit-tests.sql
+ sqlcmd -S server -d test_database -i tests/cleanup.sql
 
 # 性能測試
 perf-test:
-	sqlcmd -S server -d database -i tests/performance-tests.sql
+ sqlcmd -S server -d database -i tests/performance-tests.sql
 ```
 
 **好處**：
+
 - 自動化測試執行
 - 測試環境隔離
 - 測試結果一致性
@@ -67,14 +70,15 @@ perf-test:
 ```makefile
 # 備份資料庫
 backup:
-	sqlcmd -S server -Q "BACKUP DATABASE [$(DB_NAME)] TO DISK = '$(BACKUP_PATH)'"
+ sqlcmd -S server -Q "BACKUP DATABASE [$(DB_NAME)] TO DISK = '$(BACKUP_PATH)'"
 
 # 恢復資料庫
 restore:
-	sqlcmd -S server -Q "RESTORE DATABASE [$(DB_NAME)] FROM DISK = '$(BACKUP_PATH)'"
+ sqlcmd -S server -Q "RESTORE DATABASE [$(DB_NAME)] FROM DISK = '$(BACKUP_PATH)'"
 ```
 
 **好處**：
+
 - 標準化備份流程
 - 快速恢復操作
 - 易於腳本化
@@ -84,16 +88,17 @@ restore:
 ```makefile
 # 創建開發環境
 dev-setup:
-	sqlcmd -S localhost -Q "CREATE DATABASE dev_$(PROJECT)"
-	sqlcmd -S localhost -d dev_$(PROJECT) -i schema/full-schema.sql
+ sqlcmd -S localhost -Q "CREATE DATABASE dev_$(PROJECT)"
+ sqlcmd -S localhost -d dev_$(PROJECT) -i schema/full-schema.sql
 
 # 創建測試環境
 test-setup:
-	sqlcmd -S localhost -Q "CREATE DATABASE test_$(PROJECT)"
-	sqlcmd -S localhost -d test_$(PROJECT) -i schema/full-schema.sql
+ sqlcmd -S localhost -Q "CREATE DATABASE test_$(PROJECT)"
+ sqlcmd -S localhost -d test_$(PROJECT) -i schema/full-schema.sql
 ```
 
 **好處**：
+
 - 快速環境搭建
 - 環境一致性保證
 - 簡化新成員加入流程
@@ -103,14 +108,15 @@ test-setup:
 ```makefile
 # 生成資料庫文檔
 docs:
-	sqlcmd -S server -d database -i scripts/generate-docs.sql > docs/database-schema.md
+ sqlcmd -S server -d database -i scripts/generate-docs.sql > docs/database-schema.md
 
 # 生成 ER 圖
 er-diagram:
-	sqlcmd -S server -d database -i scripts/generate-er-diagram.sql
+ sqlcmd -S server -d database -i scripts/generate-er-diagram.sql
 ```
 
 **好處**：
+
 - 自動化文檔生成
 - 保持文檔與代碼同步
 - 節省文檔維護時間
@@ -120,16 +126,17 @@ er-diagram:
 ```makefile
 # 清理測試數據
 clean-test:
-	sqlcmd -S server -d test_database -i scripts/cleanup-test-data.sql
+ sqlcmd -S server -d test_database -i scripts/cleanup-test-data.sql
 
 # 重置開發環境
 reset-dev:
-	sqlcmd -S server -Q "DROP DATABASE dev_$(PROJECT)"
-	sqlcmd -S server -Q "CREATE DATABASE dev_$(PROJECT)"
-	sqlcmd -S server -d dev_$(PROJECT) -i schema/full-schema.sql
+ sqlcmd -S server -Q "DROP DATABASE dev_$(PROJECT)"
+ sqlcmd -S server -Q "CREATE DATABASE dev_$(PROJECT)"
+ sqlcmd -S server -d dev_$(PROJECT) -i schema/full-schema.sql
 ```
 
 **好處**：
+
 - 快速清理和重置
 - 保持環境清潔
 - 簡化調試流程
@@ -137,6 +144,7 @@ reset-dev:
 ## 與 T-SQL 的集成優勢
 
 ### 腳本組織
+
 ```makefile
 # 按功能組織 T-SQL 腳本
 SCRIPTS_DIR = src
@@ -147,12 +155,13 @@ PROCEDURES_DIR = $(SCRIPTS_DIR)/procedures
 deploy-all: deploy-tables deploy-views deploy-procedures
 
 deploy-tables:
-	for file in $(TABLES_DIR)/*.sql; do \
-		sqlcmd -S server -d database -i $$file; \
-	done
+ for file in $(TABLES_DIR)/*.sql; do \
+  sqlcmd -S server -d database -i $$file; \
+ done
 ```
 
 ### 參數化執行
+
 ```makefile
 # 支持環境變量
 DB_SERVER ?= localhost
@@ -160,12 +169,13 @@ DB_NAME ?= mydatabase
 DB_USER ?= sa
 
 deploy:
-	sqlcmd -S $(DB_SERVER) -d $(DB_NAME) -U $(DB_USER) -i schema/main.sql
+ sqlcmd -S $(DB_SERVER) -d $(DB_NAME) -U $(DB_USER) -i schema/main.sql
 ```
 
 ## 使用示例
 
 ### 基本操作
+
 ```bash
 # 部署資料庫結構
 make deploy-schema
@@ -181,6 +191,7 @@ make docs
 ```
 
 ### 環境管理
+
 ```bash
 # 設置開發環境
 make dev-setup
