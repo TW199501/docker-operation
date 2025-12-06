@@ -227,40 +227,7 @@ helm install grafana grafana/grafana
 
 ## 故障排除
 
-### 常見問題
-
-#### 1. 節點 NotReady 狀態
-
-```bash
-# 檢查節點詳細信息
-kubectl describe node <node-name>
-
-# 檢查 kubelet 狀態
-systemctl status kubelet
-
-# 檢查日誌
-journalctl -u kubelet -f
-```
-
-#### 2. Pod 無法啟動
-
-```bash
-# 檢查 Pod 詳細信息
-kubectl describe pod <pod-name>
-
-# 檢查 Pod 日誌
-kubectl logs <pod-name>
-```
-
-#### 3. 網絡問題
-
-```bash
-# 檢查 Flannel 狀態
-kubectl get pods -n kube-system | grep flannel
-
-# 檢查網絡接口
-ip a show flannel.1
-```
+部署過程中若遇到節點 NotReady、Pod 無法啟動或網路異常等問題，請參考《Proxmox Kubernetes 故障排除指南》（`troubleshooting.md`）中的對應章節。
 
 ### 重置集群
 
