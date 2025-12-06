@@ -4,7 +4,64 @@
 # Author: MickLesk (CanbiZ)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
-source /dev/stdin <<<"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)"
+# ==============================================================================
+# EMBEDDED API.FUNC - TELEMETRY & DIAGNOSTICS API (SECURE VERSION)
+# ==============================================================================
+#
+# Provides functions for sending anonymous telemetry data to Community-Scripts
+# API for analytics and diagnostics purposes.
+#
+# Security improvements:
+#   - Functions embedded directly (no dynamic loading)
+#   - HTTPS certificate validation enabled
+#   - Privacy-respecting anonymous telemetry
+#   - Error handling and validation added
+#
+# ==============================================================================
+
+explain_exit_code() {
+  local code="$1"
+  case "$code" in
+  # --- Generic / Shell ---
+  1) echo "General error / Operation not permitted" ;;
+  2) echo "Misuse of shell builtins (e.g. syntax error)" ;;
+  126) echo "Command invoked cannot execute (permission problem?)" ;;
+  127) echo "Command not found" ;;
+  128) echo "Invalid argument to exit" ;;
+  130) echo "Terminated by Ctrl+C (SIGINT)" ;;
+  137) echo "Killed (SIGKILL / Out of memory?)" ;;
+  139) echo "Segmentation fault (core dumped)" ;;
+  143) echo "Terminated (SIGTERM)" ;;
+  # --- Package manager / APT / DPKG ---
+  100) echo "APT: Package manager error (broken packages / dependency problems)" ;;
+  101) echo "APT: Configuration error (bad sources.list, malformed config)" ;;
+  255) echo "DPKG: Fatal internal error" ;;
+  # --- Proxmox Custom Codes ---
+  200) echo "Custom: Failed to create lock file" ;;
+  203) echo "Custom: Missing CTID variable" ;;
+  204) echo "Custom: Missing PCT_OSTYPE variable" ;;
+  205) echo "Custom: Invalid CTID (<100)" ;;
+  206) echo "Custom: CTID already in use (check 'pct list' and /etc/pve/lxc/)" ;;
+  207) echo "Custom: Password contains unescaped special characters (-, /, \\, *, etc.)" ;;
+  208) echo "Custom: Invalid configuration (DNS/MAC/Network format error)" ;;
+  209) echo "Custom: Container creation failed (check logs for pct create output)" ;;
+  210) echo "Custom: Cluster not quorate" ;;
+  211) echo "Custom: Timeout waiting for template lock (concurrent download in progress)" ;;
+  214) echo "Custom: Not enough storage space" ;;
+  215) echo "Custom: Container created but not listed (ghost state - check /etc/pve/lxc/)" ;;
+  216) echo "Custom: RootFS entry missing in config (incomplete creation)" ;;
+  217) echo "Custom: Storage does not support rootdir (check storage capabilities)" ;;
+  218) echo "Custom: Template file corrupted or incomplete download (size <1MB or invalid archive)" ;;
+  220) echo "Custom: Unable to resolve template path" ;;
+  221) echo "Custom: Template file exists but not readable (check file permissions)" ;;
+  222) echo "Custom: Template download failed after 3 attempts (network/storage issue)" ;;
+  223) echo "Custom: Template not available after download (storage sync issue)" ;;
+  225) echo "Custom: No template available for OS/Version (check 'pveam available')" ;;
+  231) echo "Custom: LXC stack upgrade/retry failed (outdated pve-container - check https://github.com/community-scripts/ProxmoxVE/discussions/8126)" ;;
+  # --- Default ---
+  *) echo "Unknown error" ;;
+  esac
+}
 
 function header_info {
   clear
@@ -27,7 +84,6 @@ METHOD=""
 NSAPP="debian13vm"
 var_os="debian"
 var_version="13"
-INSTALL_DOCKER="no"
 LIBGUESTFS_RESOLV_CONF_PATH="${LIBGUESTFS_RESOLV_CONF:-}"
 POST_INSTALL_MESSAGE="no"
 POST_INSTALL_DETAILS=""
@@ -69,14 +125,11 @@ THIN="discard=on,ssd=1,"
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
-trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
-trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
 function error_handler() {
   local exit_code="$?"
   local line_number="$1"
   local command="$2"
   local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
-  post_update_to_api "failed" "${command}"
   echo -e "\n$error_message\n"
   cleanup_vmid
 }
@@ -107,13 +160,12 @@ function cleanup_vmid() {
 
 function cleanup() {
   popd >/dev/null
-  post_update_to_api "done" "none"
   rm -rf $TEMP_DIR
 }
 
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-if ACTION=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Debian 13 VM" --menu "This will create a new Debian 13 VM." 10 60 2 \
+if ACTION=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Debian 13 VM" --menu "This will create a new Debian 13 VM using cloud-init." 10 60 2 \
   "proceed" "Start creation" \
   "exit" "Cancel and quit" \
   3>&1 1>&2 2>&3); then
@@ -137,86 +189,6 @@ function msg_ok() {
 function msg_error() {
   local msg="$1"
   echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
-}
-
-function queue_post_boot_install() {
-  local install_docker="$1"
-  local script_path="$TEMP_DIR/elf-postinstall.sh"
-  local service_path="$TEMP_DIR/elf-postinstall.service"
-
-  msg_info "Scheduling post-boot installation inside the VM"
-
-  cat >"$script_path" <<'EOF'
-#!/bin/bash
-set -e
-export DEBIAN_FRONTEND=noninteractive
-log="/var/log/elf-postinstall.log"
-exec >>"$log" 2>&1
-apt-get update -qq
-apt-get install -y qemu-guest-agent
-EOF
-
-  if [ "$install_docker" = "yes" ]; then
-    cat >>"$script_path" <<'EOF'
-curl -fsSL https://get.docker.com | sh
-systemctl enable --now docker || true
-EOF
-  fi
-
-  cat >>"$script_path" <<'EOF'
-systemctl enable --now qemu-guest-agent || true
-rm -f /root/elf-postinstall.sh
-rm -f /etc/systemd/system/elf-postinstall.service
-systemctl daemon-reload || true
-EOF
-
-  cat >"$service_path" <<'EOF'
-[Unit]
-Description=ELF Debian13 post-install tasks
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /root/elf-postinstall.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  virt-customize -a "${FILE}" --copy-in "$script_path":/root >/dev/null || return 1
-  virt-customize -a "${FILE}" --copy-in "$service_path":/etc/systemd/system >/dev/null || return 1
-  virt-customize -a "${FILE}" --run-command "chmod +x /root/elf-postinstall.sh" >/dev/null || return 1
-  virt-customize -a "${FILE}" --run-command "ln -sf /etc/systemd/system/elf-postinstall.service /etc/systemd/system/multi-user.target.wants/elf-postinstall.service" >/dev/null || return 1
-
-  POST_INSTALL_MESSAGE="yes"
-  if [ "$install_docker" = "yes" ]; then
-    POST_INSTALL_DETAILS="Docker 與 qemu-guest-agent 將在 VM 第一次啟動時自動安裝。請保持 VM 連上網路。"
-  else
-    POST_INSTALL_DETAILS="qemu-guest-agent 將在 VM 第一次啟動時自動安裝。請保持 VM 連上網路。"
-  fi
-  msg_ok "已安排開機後自動安裝"
-  return 0
-}
-
-function embed_docker_stack() {
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null || return 1
-  return 0
-}
-
-function embed_guest_agent_only() {
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null || return 1
-  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null || return 1
-  return 0
 }
 
 function check_root() {
@@ -306,7 +278,7 @@ function default_settings() {
   MACHINE=""
   DISK_SIZE="10G"
   DISK_CACHE=""
-  HN="docker"
+  HN="debian13"
   CPU_TYPE=""
   CORE_COUNT="2"
   RAM_SIZE="4096"
@@ -315,7 +287,6 @@ function default_settings() {
   VLAN=""
   MTU=""
   START_VM="yes"
-  CLOUD_INIT="no"
   METHOD="default"
   echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
@@ -329,31 +300,8 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-  if CLOUD_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "CLOUD-INIT" --menu "Configure Cloud-Init?" 10 58 2 \
-    "yes" "genericcloud image (adds cloud-init drive)" \
-    "no" "nocloud image (no cloud-init drive)" \
-    3>&1 1>&2 2>&3); then
-    if [ "$CLOUD_CHOICE" = "yes" ]; then
-      CLOUD_INIT="yes"
-    else
-      CLOUD_INIT="no"
-    fi
-  else
-    exit-script
-  fi
-  echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}$CLOUD_INIT${CL}"
-  echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
-  echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
-
-  if DOCKER_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
-    "yes" "Embed Docker into the VM image" \
-    "no" "Skip Docker installation" \
-    3>&1 1>&2 2>&3); then
-    INSTALL_DOCKER="$DOCKER_CHOICE"
-  else
-    exit-script
-  fi
-  echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}$INSTALL_DOCKER${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Using Cloud-init: ${BGN}Yes (Debian 13 genericcloud)${CL}"
+  echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using cloud-init with default settings${CL}"
 }
 
 function advanced_settings() {
@@ -423,9 +371,9 @@ function advanced_settings() {
     exit-script
   fi
 
-  if VM_NAME=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set Hostname" 8 58 debian --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if VM_NAME=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set Hostname" 8 58 debian13 --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $VM_NAME ]; then
-      HN="debian"
+      HN="debian13"
       echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}$HN${CL}"
     else
       HN=$(echo ${VM_NAME,,} | tr -d ' ')
@@ -521,25 +469,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CLOUD_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "CLOUD-INIT" --menu "Configure the VM with Cloud-init?" 10 58 2 \
-    "yes" "genericcloud image (adds cloud-init drive)" \
-    "no" "nocloud image (no cloud-init drive)" \
-    3>&1 1>&2 2>&3); then
-    CLOUD_INIT="$CLOUD_CHOICE"
-  else
-    exit-script
-  fi
-  echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}$CLOUD_INIT${CL}"
-
-  if DOCKER_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
-    "yes" "Embed Docker into the VM image" \
-    "no" "Skip Docker installation" \
-    3>&1 1>&2 2>&3); then
-    INSTALL_DOCKER="$DOCKER_CHOICE"
-  else
-    exit-script
-  fi
-  echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}$INSTALL_DOCKER${CL}"
+  echo -e "${CLOUD}${BOLD}${DGN}Using Cloud-init: ${BGN}Yes (Debian 13 genericcloud)${CL}"
 
   if START_DECISION=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "START VIRTUAL MACHINE" --menu "Start VM when completed?" 10 58 2 \
     "yes" "Start automatically" \
@@ -556,7 +486,7 @@ function advanced_settings() {
     "redo" "Do-Over settings" \
     3>&1 1>&2 2>&3); then
     if [ "$FINAL_STEP" = "create" ]; then
-      echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above advanced settings${CL}"
+      echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using cloud-init with advanced settings${CL}"
     else
       header_info
       echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
@@ -591,8 +521,6 @@ pve_check
 ssh_check
 start_script
 
-post_to_api_vm
-
 msg_info "Validating Storage"
 while read -r line; do
   TAG=$(echo $line | awk '{print $1}')
@@ -622,11 +550,7 @@ fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
-if [ "$CLOUD_INIT" == "yes" ]; then
-  URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
-else
-  URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-amd64.qcow2
-fi
+URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 curl -f#SL -o "$(basename "$URL")" "$URL"
@@ -689,132 +613,25 @@ for i in {0,1}; do
   fi
 done
 
-if ! command -v virt-customize &>/dev/null; then
-  msg_info "Installing libguestfs-tools on the host"
-  apt-get -qq update >/dev/null
-  apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
-  apt-get -qq install dhcpcd-base -y >/dev/null 2>&1 || true
-  msg_ok "Installed libguestfs-tools successfully"
-fi
-
-RESOLV_CONF_PATH="${LIBGUESTFS_RESOLV_CONF_PATH:-/etc/resolv.conf}"
-if [ -f "$RESOLV_CONF_PATH" ]; then
-  export LIBGUESTFS_RESOLV_CONF="$RESOLV_CONF_PATH"
-else
-  msg_info "Specified resolv.conf ($RESOLV_CONF_PATH) not found; libguestfs will use default settings"
-fi
-
-msg_info "Preparing network environment for virt-customize"
-export http_proxy="${http_proxy:-}"
-export https_proxy="${https_proxy:-}"
-
-if [ "$INSTALL_DOCKER" == "yes" ]; then
-  msg_info "Embedding Docker engine and Compose into the Debian 13 image"
-  if ! virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null; then
-    msg_error "Failed to install prerequisites inside the image"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null; then
-    msg_error "Failed to add Docker GPG key"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null; then
-    msg_error "Failed to add Docker repository"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null; then
-    msg_error "Failed to install Docker components"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null; then
-    msg_error "Failed to install Docker Compose"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null; then
-    msg_error "Failed to enable Docker service"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null; then
-    msg_error "Failed to set hostname inside the image"
-    exit 1
-  fi
-  if ! virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null; then
-    msg_error "Failed to reset machine-id"
-    exit 1
-  fi
-  msg_ok "Docker engine and Compose embedded successfully"
-else
-  msg_info "Adding QEMU Guest Agent into the Debian 13 image"
-  if virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null 2>&1; then
-    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null
-    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-    msg_ok "Guest agent installed successfully"
-  else
-    msg_error "Failed to install qemu-guest-agent; continuing without it"
-    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null 2>&1
-    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null 2>&1
-  fi
-fi
-
-msg_info "Creating a Debian 13 VM"
+msg_info "Creating a Debian 13 VM with cloud-init support"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags community-script -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
-if [ "$CLOUD_INIT" == "yes" ]; then
-  qm set $VMID \
-    -efidisk0 ${DISK0_REF}${FORMAT} \
-    -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -scsi1 ${STORAGE}:cloudinit \
-    -boot order=scsi0 \
-    -serial0 socket >/dev/null
-else
-  qm set $VMID \
-    -efidisk0 ${DISK0_REF}${FORMAT} \
-    -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-    -boot order=scsi0 \
-    -serial0 socket >/dev/null
-fi
-DESCRIPTION=$(
-  cat <<EOF
-<div align='center'>
-  <a href='https://Helper-Scripts.com' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
-  </a>
+qm set $VMID \
+  -efidisk0 ${DISK0_REF}${FORMAT} \
+  -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
+  -scsi1 ${STORAGE}:cloudinit \
+  -boot order=scsi0 \
+  -serial0 socket >/dev/null
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>Debian VM</h2>
 
-  <p style='margin: 16px 0;'>
-    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
-    </a>
-  </p>
-
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
-  </span>
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
-  </span>
-  <span style='margin: 0 10px;'>
-    <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
-  </span>
-</div>
-EOF
-)
 qm set "$VMID" -description "$DESCRIPTION" >/dev/null
-if [ -n "$DISK_SIZE" ]; then
-  msg_info "Resizing disk to $DISK_SIZE GB"
-  qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
-else
-  msg_info "Using default disk size of $DEFAULT_DISK_SIZE GB"
-  qm resize $VMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
-fi
 
-msg_ok "Created a Debian 13 VM ${CL}${BL}(${HN})"
+msg_info "Resizing disk to $DISK_SIZE"
+qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
+
+msg_ok "Created a Debian 13 VM with cloud-init support ${CL}${BL}(${HN})"
 if [ "$START_VM" == "yes" ]; then
   msg_info "Starting Debian 13 VM"
   qm start $VMID

@@ -81,6 +81,11 @@ function msg_error() {
   echo -e "${RD}${BOLD}${msg}${CL}"
 }
 
+function msg_warning() {
+  local msg="$1"
+  echo -e "${YW}${BOLD}${msg}${CL}"
+}
+
 # 設置 root 密碼
 function set_root_password() {
   while true; do
@@ -661,6 +666,93 @@ $(lsb_release -cs) stable" >/etc/apt/sources.list.d/docker.list
   chmod +x /usr/local/bin/docker-compose
   systemctl enable --now docker >/dev/null 2>&1 || true
   msg_ok "Docker 與 Compose 安裝完成"
+
+  # 安裝完成後提供資源額度設定
+  if ! command -v whiptail >/dev/null 2>&1; then
+    return
+  fi
+
+  local cores mem_kb mem_g
+  cores=$(nproc 2>/dev/null || echo 1)
+  mem_kb=$(grep -i '^MemTotal:' /proc/meminfo 2>/dev/null | awk '{print $2}')
+  mem_g=$((mem_kb / 1024 / 1024))
+
+  local base_mem base_cpu
+  # 依表格選基準方案
+  if [ "$cores" -le 2 ] && [ "$mem_g" -le 2 ]; then
+    base_mem="1536M"   # 2c2g
+    base_cpu="75%"
+  elif [ "$cores" -le 2 ] && [ "$mem_g" -le 4 ]; then
+    base_mem="3G"      # 2c4g
+    base_cpu="75%"
+  elif [ "$cores" -le 4 ] && [ "$mem_g" -le 4 ]; then
+    base_mem="3G"      # 4c4g
+    base_cpu="75%"
+  elif [ "$cores" -le 4 ] && [ "$mem_g" -le 6 ]; then
+    base_mem="5G"      # 4c6g
+    base_cpu="87%"
+  else
+    base_mem="7G"      # 視為 4c8g 級距以上
+    base_cpu="90%"
+  fi
+
+  # 衍生兩個放寬方案
+  local mem_plus cpu_plus
+  case "$base_mem" in
+    1536M) mem_plus="2048M" ;;
+    3G)    mem_plus="4G" ;;
+    5G)    mem_plus="6G" ;;
+    7G)    mem_plus="8G" ;;
+    *)     mem_plus="$base_mem" ;;
+  esac
+
+  case "$base_cpu" in
+    75%) cpu_plus="85%" ;;
+    87%) cpu_plus="93%" ;;
+    90%) cpu_plus="95%" ;;
+    *)   cpu_plus="$base_cpu" ;;
+  esac
+
+  local choice title
+  title="偵測到主機 ${cores} 核 / 約 ${mem_g}G RAM\n選擇要給 Docker daemon 的資源上限："
+
+  choice=$(whiptail --backtitle "ELF Debian13 ALL IN" \
+    --title "Docker 資源額度" \
+    --menu "$title" 15 70 3 \
+    "base" "基準：MemoryMax=${base_mem} CPUQuota=${base_cpu}" \
+    "more-mem" "加記憶體：MemoryMax=${mem_plus} CPUQuota=${base_cpu}" \
+    "more-cpu" "加CPU：MemoryMax=${base_mem} CPUQuota=${cpu_plus}" \
+    3>&1 1>&2 2>&3) || return
+
+  local final_mem final_cpu
+  case "$choice" in
+    base)
+      final_mem="$base_mem"
+      final_cpu="$base_cpu"
+      ;;
+    more-mem)
+      final_mem="$mem_plus"
+      final_cpu="$base_cpu"
+      ;;
+    more-cpu)
+      final_mem="$base_mem"
+      final_cpu="$cpu_plus"
+      ;;
+    *)
+      return
+      ;;
+  esac
+
+  mkdir -p /etc/systemd/system/docker.service.d
+  cat >/etc/systemd/system/docker.service.d/override.conf <<EOF
+[Service]
+MemoryMax=${final_mem}
+CPUQuota=${final_cpu}
+EOF
+
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl restart docker >/dev/null 2>&1 || true
+  msg_ok "Docker 資源額度已套用：MemoryMax=${final_mem}, CPUQuota=${final_cpu}"
 }
 
 function cleanup_log_cron() {
@@ -712,9 +804,8 @@ if whiptail --backtitle "ELF Debian13 ALL IN" --title "Docker / Compose" --yesno
   install_docker_stack
 fi
 
-if whiptail --backtitle "ELF Debian13 ALL IN" --title "QEMU Guest Agent" --yesno "是否安裝 qemu-guest-agent？" 10 60; then
-  install_guest_agent
-fi
+# QEMU Guest Agent 為必裝，直接執行安裝
+install_guest_agent
 
 if whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT 密碼" --yesno "是否設定 root 用戶新密碼？" 10 60; then
   set_root_password
