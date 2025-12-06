@@ -23,6 +23,14 @@
 2. 規劃存儲容量
 3. 配置備份策略
 
+### 腳本與配置
+
+1. `proxmox-k8s/k8s-cluster/k8s-config.sh` 用於調整：
+   - Kubernetes 版本 (`K8S_REPO_VERSION`)
+   - Pod 網段 (`POD_NETWORK_CIDR`)
+   - CNI 外掛類型 (`CNI_PLUGIN`，預設 flannel，可設為 calico)
+2. 在執行 `create-cluster.sh` 前，如需客製化版本或網路配置，可先編輯此檔案。
+
 ## 部署步驟
 
 ### 第一階段：環境準備

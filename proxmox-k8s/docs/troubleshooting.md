@@ -440,3 +440,12 @@ kubectl get pods -n monitoring
 - 調整 Fluentd 配置
 - 檢查日誌驅動
 - 驗證路徑權限
+
+## 腳本與 CI 檢查
+
+1. 倉庫中提供 `tests/test_k8s_scripts.sh`，用於對 K8S 腳本做基礎語法檢查。
+2. GitHub Actions workflow（例如 `proxmox-k8s-ci`）會在提交或 PR 時自動執行：
+   - `shellcheck` 檢查腳本風格與常見錯誤
+   - `bash -n` 語法檢查
+   - 執行 `tests/test_k8s_scripts.sh` 進行 smoke test
+3. 若 pipeline 失敗，請先查看對應的 Actions log，依錯誤訊息修正腳本後再重新提交。

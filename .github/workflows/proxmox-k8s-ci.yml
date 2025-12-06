@@ -1,0 +1,56 @@
+name: Proxmox K8s Scripts CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'proxmox-k8s/**'
+      - 'tests/test_k8s_scripts.sh'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'proxmox-k8s/**'
+      - 'tests/test_k8s_scripts.sh'
+
+jobs:
+  shell-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on proxmox-k8s scripts
+        run: |
+          if [ -d "proxmox-k8s" ]; then
+            find proxmox-k8s -name '*.sh' -type f -print0 | xargs -0 -r shellcheck || true
+          fi
+
+      - name: Bash syntax check (bash -n)
+        run: |
+          if [ -d "proxmox-k8s" ]; then
+            find proxmox-k8s -name '*.sh' -type f -print0 | xargs -0 -r bash -n
+          fi
+          if [ -f tests/test_k8s_scripts.sh ]; then
+            bash -n tests/test_k8s_scripts.sh
+          fi
+
+  k8s-smoke:
+    runs-on: ubuntu-latest
+    needs: shell-lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Run K8s script smoke tests
+        run: |
+          if [ -f tests/test_k8s_scripts.sh ]; then
+            chmod +x tests/test_k8s_scripts.sh
+            tests/test_k8s_scripts.sh
+          else
+            echo "tests/test_k8s_scripts.sh not found, skipping"
+          fi
