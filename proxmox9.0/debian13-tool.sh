@@ -16,9 +16,10 @@
 ulimit -n 65536 2>/dev/null || true
 ulimit -f unlimited 2>/dev/null || true
 
-# 設置緩存優化
-export LC_ALL=C
-export LANG=C
+# 設置緩存優化與 whiptail 顏色
+export LC_ALL="${LC_ALL:-C.UTF-8}"
+export LANG="${LANG:-C.UTF-8}"
+export NEWT_COLORS='root=white,blue border=white,blue title=white,blue window=white,blue textbox=black,white button=white,blue actbutton=yellow,blue entry=black,white actsellist=white,blue sellist=black,white'
 
 function header_info {
   clear
@@ -705,100 +706,42 @@ EOF
   msg_ok "已設定 $choice 排程"
 }
 
-function account_menu() {
-  while true; do
-    local choice
-    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "帳號 / SSH" --menu "選擇要執行的操作" 15 60 4 \
-      "rootpass" "設定 root 密碼" \
-      "ssh" "安裝並啟用 SSH (允許 root 密碼登入)" \
-      "guest" "安裝 qemu-guest-agent" \
-      "back" "返回主選單" \
-      3>&1 1>&2 2>&3) || break
-    case "$choice" in
-      rootpass) set_root_password ;;
-      ssh) configure_ssh ;;
-      guest) install_guest_agent ;;
-      back) break ;;
-      *) break ;;
-    esac
-  done
-}
+echo
+# 依序詢問各項操作
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "Docker / Compose" --yesno "是否安裝 Docker Engine 與 Docker Compose？" 10 60; then
+  install_docker_stack
+fi
 
-function docker_menu() {
-  while true; do
-    local choice
-    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Docker / Compose" --menu "選擇要執行的操作" 12 60 3 \
-      "docker" "安裝 Docker 與 Compose" \
-      "guest" "安裝 qemu-guest-agent" \
-      "back" "返回主選單" \
-      3>&1 1>&2 2>&3) || break
-    case "$choice" in
-      docker) install_docker_stack ;;
-      guest) install_guest_agent ;;
-      back) break ;;
-      *) break ;;
-    esac
-  done
-}
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "QEMU Guest Agent" --yesno "是否安裝 qemu-guest-agent？" 10 60; then
+  install_guest_agent
+fi
 
-function network_menu() {
-  while true; do
-    local choice
-    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "網路設定" --menu "選擇要執行的操作" 15 60 4 \
-      "static" "配置固定 IP / DNS" \
-      "ipv6" "禁用 IPv6" \
-      "opt" "優化網路傳輸" \
-      "back" "返回主選單" \
-      3>&1 1>&2 2>&3) || break
-    case "$choice" in
-      static) configure_static_ip ;;
-      ipv6) disable_ipv6 ;;
-      opt) optimize_network_stack ;;
-      back) break ;;
-      *) break ;;
-    esac
-  done
-}
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT 密碼" --yesno "是否設定 root 用戶新密碼？" 10 60; then
+  set_root_password
+fi
 
-function system_menu() {
-  while true; do
-    local choice
-    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "系統 / 磁碟優化" --menu "選擇要執行的操作" 15 60 4 \
-      "large" "優化大文件處理" \
-      "disk" "擴展硬碟 (含 LVM)" \
-      "log" "設定 log 清理排程" \
-      "back" "返回主選單" \
-      3>&1 1>&2 2>&3) || break
-    case "$choice" in
-      large) optimize_for_large_files ;;
-      disk) expand_disk ;;
-      log) schedule_log_cleanup ;;
-      back) break ;;
-      *) break ;;
-    esac
-  done
-}
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "SSH 服務" --yesno "是否安裝並啟用 SSH（允許 root 登入）？" 10 60; then
+  configure_ssh
+fi
 
-function main_menu() {
-  while true; do
-    local choice
-    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "第二階段工具" --menu "選擇要執行的操作" 18 70 6 \
-      "account" "帳號 / SSH / guest agent" \
-      "network" "網路設定與優化" \
-      "system" "磁碟與系統優化 / log 維護" \
-      "docker" "Docker / Compose 安裝" \
-      "quit" "結束" \
-      3>&1 1>&2 2>&3) || exit 0
-    case "$choice" in
-      account) account_menu ;;
-      network) network_menu ;;
-      system) system_menu ;;
-      docker) docker_menu ;;
-      quit) exit 0 ;;
-      *) break ;;
-    esac
-  done
-}
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" --yesno "是否要配置固定 IP / DNS？" 10 60; then
+  configure_static_ip
+fi
 
-main_menu
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "大文件優化" --yesno "是否要套用大文件處理優化？" 10 60; then
+  optimize_for_large_files
+fi
 
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "磁碟擴展" --yesno "是否要擴展硬碟（含 LVM）？" 10 60; then
+  expand_disk
+fi
+
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "網路優化" --yesno "是否要套用網路傳輸優化（BBR/fq 等）？" 10 60; then
+  optimize_network_stack
+fi
+
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "Log 清理排程" --yesno "是否設定 log 定期清理排程？" 10 60; then
+  schedule_log_cleanup
+fi
+
+whiptail --backtitle "ELF Debian13 ALL IN" --title "完成" --msgbox "所有步驟已完成，可退出工具。" 8 50
