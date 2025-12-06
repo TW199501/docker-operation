@@ -99,7 +99,7 @@ function cleanup() {
 
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-if whiptail --backtitle "Proxmox VE Helper Scripts" --title "Debian 13 VM" --yesno "This will create a New Debian 13 VM. Proceed?" 10 58; then
+if whiptail --backtitle "ELF Debian13 VM install" --title "Debian 13 VM" --yesno "This will create a New Debian 13 VM. Proceed?" 10 58; then
   :
 else
   header_info && echo -e "${CROSS}${RD}User exited script${CL}\n" && exit
@@ -175,7 +175,7 @@ function arch_check() {
 function ssh_check() {
   if command -v pveversion >/dev/null 2>&1; then
     if [ -n "${SSH_CLIENT:+x}" ]; then
-      if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "SSH DETECTED" --yesno "It's suggested to use the Proxmox shell instead of SSH, since SSH can create issues while gathering variables. Would you like to proceed with using SSH?" 10 62; then
+      if whiptail --backtitle "ELF Debian13 VM install" --defaultno --title "SSH DETECTED" --yesno "It's suggested to use the Proxmox shell instead of SSH, since SSH can create issues while gathering variables. Would you like to proceed with using SSH?" 10 62; then
         echo "you've been warned"
       else
         clear
@@ -223,7 +223,7 @@ function default_settings() {
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
     INSTALL_DOCKER="yes"
   else
@@ -231,7 +231,7 @@ function default_settings() {
     INSTALL_DOCKER="no"
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}yes${CL}"
     INSTALL_NODE_EXPORTER="yes"
   else
@@ -256,7 +256,7 @@ function advanced_settings() {
   METHOD="advanced"
   [ -z "${VMID:-}" ] && VMID=$(get_valid_nextid)
   while true; do
-    if VMID=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Virtual Machine ID" 8 58 $VMID --title "VIRTUAL MACHINE ID" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+    if VMID=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set Virtual Machine ID" 8 58 $VMID --title "VIRTUAL MACHINE ID" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
       if [ -z "$VMID" ]; then
         VMID=$(get_valid_nextid)
       fi
@@ -272,7 +272,7 @@ function advanced_settings() {
     fi
   done
 
-  if MACH=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "MACHINE TYPE" --radiolist --cancel-button Exit-Script "Choose Type" 10 58 2 \
+  if MACH=$(whiptail --backtitle "ELF Debian13 VM install" --title "MACHINE TYPE" --radiolist --cancel-button Exit-Script "Choose Type" 10 58 2 \
     "i440fx" "Machine i440fx" ON \
     "q35" "Machine q35" OFF \
     3>&1 1>&2 2>&3); then
@@ -289,7 +289,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if DISK_SIZE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Disk Size in GiB (e.g., 10, 20)" 8 58 "$DISK_SIZE" --title "DISK SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if DISK_SIZE=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set Disk Size in GiB (e.g., 10, 20)" 8 58 "$DISK_SIZE" --title "DISK SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     DISK_SIZE=$(echo "$DISK_SIZE" | tr -d ' ')
     if [[ "$DISK_SIZE" =~ ^[0-9]+$ ]]; then
       DISK_SIZE="${DISK_SIZE}G"
@@ -304,7 +304,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if DISK_CACHE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "DISK CACHE" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
+  if DISK_CACHE=$(whiptail --backtitle "ELF Debian13 VM install" --title "DISK CACHE" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
     "0" "None (Default)" ON \
     "1" "Write Through" OFF \
     3>&1 1>&2 2>&3); then
@@ -319,7 +319,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if VM_NAME=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Hostname" 8 58 docker --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if VM_NAME=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set Hostname" 8 58 docker --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $VM_NAME ]; then
       HN="docker"
       echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}$HN${CL}"
@@ -333,7 +333,7 @@ function advanced_settings() {
 
   echo -e "${HOSTNAME}${BOLD}${DGN}OS Version: ${BGN}Debian 13${CL}"
 
-  if CPU_TYPE1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU MODEL" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
+  if CPU_TYPE1=$(whiptail --backtitle "ELF Debian13 VM install" --title "CPU MODEL" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
     "0" "KVM64 (Default)" ON \
     "1" "Host" OFF \
     3>&1 1>&2 2>&3); then
@@ -348,7 +348,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CORE_COUNT=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Allocate CPU Cores" 8 58 2 --title "CORE COUNT" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if CORE_COUNT=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Allocate CPU Cores" 8 58 2 --title "CORE COUNT" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $CORE_COUNT ]; then
       CORE_COUNT="2"
       echo -e "${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}$CORE_COUNT${CL}"
@@ -359,7 +359,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if RAM_SIZE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Allocate RAM in MiB" 8 58 2048 --title "RAM" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if RAM_SIZE=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Allocate RAM in MiB" 8 58 2048 --title "RAM" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $RAM_SIZE ]; then
       RAM_SIZE="2048"
       echo -e "${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}$RAM_SIZE${CL}"
@@ -370,7 +370,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if BRG=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a Bridge" 8 58 vmbr0 --title "BRIDGE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if BRG=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set a Bridge" 8 58 vmbr0 --title "BRIDGE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $BRG ]; then
       BRG="vmbr0"
       echo -e "${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}$BRG${CL}"
@@ -381,7 +381,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if MAC1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a MAC Address" 8 58 $GEN_MAC --title "MAC ADDRESS" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if MAC1=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set a MAC Address" 8 58 $GEN_MAC --title "MAC ADDRESS" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $MAC1 ]; then
       MAC="$GEN_MAC"
       echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}$MAC${CL}"
@@ -393,7 +393,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if VLAN1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a Vlan(leave blank for default)" 8 58 --title "VLAN" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if VLAN1=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set a Vlan(leave blank for default)" 8 58 --title "VLAN" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $VLAN1 ]; then
       VLAN1="Default"
       VLAN=""
@@ -406,7 +406,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if MTU1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Interface MTU Size (leave blank for default)" 8 58 --title "MTU SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if MTU1=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set Interface MTU Size (leave blank for default)" 8 58 --title "MTU SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $MTU1 ]; then
       MTU1="Default"
       MTU=""
@@ -419,7 +419,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "INSTALL DOCKER" --yesno "Install Docker and Docker Compose?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}yes${CL}"
     INSTALL_DOCKER="yes"
   else
@@ -427,7 +427,7 @@ function advanced_settings() {
     INSTALL_DOCKER="no"
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "INSTALL NODE EXPORTER" --yesno "Install Prometheus Node Exporter for monitoring?" 10 58); then
     echo -e "${CLOUD}${BOLD}${DGN}Install Node Exporter: ${BGN}yes${CL}"
     INSTALL_NODE_EXPORTER="yes"
   else
@@ -435,7 +435,7 @@ function advanced_settings() {
     INSTALL_NODE_EXPORTER="no"
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
     echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
     START_VM="yes"
   else
@@ -444,9 +444,9 @@ function advanced_settings() {
   fi
 
   # Cloud-Init Configuration
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT CONFIGURATION" --yesno "Configure Cloud-Init (user, password, network)?" 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "CLOUD-INIT CONFIGURATION" --yesno "Configure Cloud-Init (user, password, network)?" 10 58); then
     # Username
-    if CI_USER=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Cloud-Init username" 8 58 debian --title "CLOUD-INIT USER" --cancel-button Skip 3>&1 1>&2 2>&3); then
+    if CI_USER=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set Cloud-Init username" 8 58 debian --title "CLOUD-INIT USER" --cancel-button Skip 3>&1 1>&2 2>&3); then
       if [ -z "$CI_USER" ]; then
         CI_USER="debian"
       fi
@@ -457,7 +457,7 @@ function advanced_settings() {
     fi
 
     # Password
-    if CI_PASSWORD=$(whiptail --backtitle "Proxmox VE Helper Scripts" --passwordbox "Set Cloud-Init password" 8 58 --title "CLOUD-INIT PASSWORD" --cancel-button Skip 3>&1 1>&2 2>&3); then
+    if CI_PASSWORD=$(whiptail --backtitle "ELF Debian13 VM install" --passwordbox "Set Cloud-Init password" 8 58 --title "CLOUD-INIT PASSWORD" --cancel-button Skip 3>&1 1>&2 2>&3); then
       if [ -z "$CI_PASSWORD" ]; then
         CI_PASSWORD="debian"
       fi
@@ -468,19 +468,19 @@ function advanced_settings() {
     fi
 
     # Network Configuration
-    if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "NETWORK CONFIG" --yesno "Use DHCP for network configuration?" --defaultno 10 58); then
+    if (whiptail --backtitle "ELF Debian13 VM install" --title "NETWORK CONFIG" --yesno "Use DHCP for network configuration?" --defaultno 10 58); then
       CI_IP_CONFIG="ip=dhcp"
       echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}DHCP${CL}"
     else
       # Static IP
-      if CI_IP=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set static IP address (e.g., 192.168.1.100/24)" 8 58 --title "STATIC IP" --cancel-button Skip 3>&1 1>&2 2>&3); then
+      if CI_IP=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set static IP address (e.g., 192.168.1.100/24)" 8 58 --title "STATIC IP" --cancel-button Skip 3>&1 1>&2 2>&3); then
         if [ -n "$CI_IP" ]; then
           # Ensure subnet mask is included
           if [[ "$CI_IP" != */* ]]; then
             CI_IP="${CI_IP}/24"
           fi
           # Gateway
-          if CI_GW=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set gateway address" 8 58 --title "GATEWAY" --cancel-button Skip 3>&1 1>&2 2>&3); then
+          if CI_GW=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set gateway address" 8 58 --title "GATEWAY" --cancel-button Skip 3>&1 1>&2 2>&3); then
             if [ -n "$CI_GW" ]; then
               CI_IP_CONFIG="ip=${CI_IP},gw=${CI_GW}"
               echo -e "${CLOUD}${BOLD}${DGN}Network Config: ${BGN}Static IP: $CI_IP, Gateway: $CI_GW${CL}"
@@ -503,7 +503,7 @@ function advanced_settings() {
     fi
 
     # DNS Configuration
-    if CI_DNS=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set DNS nameservers (space-separated, e.g., 8.8.8.8 1.1.1.1)" 8 58 "8.8.8.8 1.1.1.1" --title "DNS SERVERS" --cancel-button Skip 3>&1 1>&2 2>&3); then
+    if CI_DNS=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Set DNS nameservers (space-separated, e.g., 8.8.8.8 1.1.1.1)" 8 58 "8.8.8.8 1.1.1.1" --title "DNS SERVERS" --cancel-button Skip 3>&1 1>&2 2>&3); then
       if [ -n "$CI_DNS" ]; then
         CI_NAMESERVER="$CI_DNS"
         echo -e "${CLOUD}${BOLD}${DGN}DNS Servers: ${BGN}$CI_DNS${CL}"
@@ -517,7 +517,7 @@ function advanced_settings() {
     fi
 
     # SSH Public Key (optional)
-    if CI_SSHKEY=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Paste SSH public key (optional, leave blank to skip)" 10 58 --title "SSH PUBLIC KEY" --cancel-button Skip 3>&1 1>&2 2>&3); then
+    if CI_SSHKEY=$(whiptail --backtitle "ELF Debian13 VM install" --inputbox "Paste SSH public key (optional, leave blank to skip)" 10 58 --title "SSH PUBLIC KEY" --cancel-button Skip 3>&1 1>&2 2>&3); then
       if [ -n "$CI_SSHKEY" ]; then
         echo -e "${CLOUD}${BOLD}${DGN}SSH Key: ${BGN}Configured${CL}"
       else
@@ -541,7 +541,7 @@ function advanced_settings() {
     echo -e "${CLOUD}${BOLD}${DGN}Cloud-Init: ${BGN}Using defaults (debian/debian, DHCP)${CL}"
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Debian 13 VM?" --no-button Do-Over 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Debian 13 VM?" --no-button Do-Over 10 58); then
     echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above advanced settings${CL}"
   else
     header_info
@@ -551,7 +551,7 @@ function advanced_settings() {
 }
 
 function start_script() {
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "SETTINGS" --yesno "Use Default Settings?" --no-button Advanced 10 58); then
+  if (whiptail --backtitle "ELF Debian13 VM install" --title "SETTINGS" --yesno "Use Default Settings?" --no-button Advanced 10 58); then
     header_info
     echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings${CL}"
     default_settings
@@ -596,7 +596,7 @@ elif [ $((${#STORAGE_MENU[@]} / 3)) -eq 1 ]; then
   STORAGE=${STORAGE_MENU[0]}
 else
   while [ -z "${STORAGE:+x}" ]; do
-    STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
+    STORAGE=$(whiptail --backtitle "ELF Debian13 VM install" --title "Storage Pools" --radiolist \
       "Which storage pool would you like to use for ${HN}?\nTo make a selection, use the Spacebar.\n" \
       16 $(($MSG_MAX_LENGTH + 23)) 6 \
       "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)
@@ -605,17 +605,45 @@ fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
-# 檢查本地是否已有映像檔
+# 檢查本地是否已有映像檔，並檢查版本
 LOCAL_IMAGE_DIR="/var/lib/vz/template/iso"
 LOCAL_IMAGE="$LOCAL_IMAGE_DIR/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
+REMOTE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
 
-if [ -f "$LOCAL_IMAGE" ] && [ -s "$LOCAL_IMAGE" ]; then
-  msg_info "找到本地 Debian 13 映像檔"
-  URL="$LOCAL_IMAGE"
-  USE_LOCAL_IMAGE=true
+# 添加強制更新選項
+FORCE_UPDATE=false
+if [ "$1" == "--force-update" ]; then
+  FORCE_UPDATE=true
+  msg_info "強制更新模式：將下載最新映像檔"
+fi
+
+# 檢查本地映像檔是否存在且不是強制更新模式
+if [ -f "$LOCAL_IMAGE" ] && [ -s "$LOCAL_IMAGE" ] && [ "$FORCE_UPDATE" = false ]; then
+  # 檢查本地映像檔的修改時間
+  LOCAL_MOD_TIME=$(stat -c %Y "$LOCAL_IMAGE")
+  CURRENT_TIME=$(date +%s)
+  DIFF_DAYS=$(( (CURRENT_TIME - LOCAL_MOD_TIME) / 86400 ))
+
+  # 如果映像檔超過30天未更新，提示用戶
+  if [ $DIFF_DAYS -gt 30 ]; then
+    msg_info "本地映像檔已有 $DIFF_DAYS 天未更新"
+    if (whiptail --backtitle "ELF Debian13 VM install" --title "映像檔更新" --yesno "本地映像檔已有 $DIFF_DAYS 天未更新，是否下載最新版本？" 10 60); then
+      msg_info "用戶選擇更新映像檔"
+      URL="$REMOTE_URL"
+      USE_LOCAL_IMAGE=false
+    else
+      msg_info "用戶選擇使用現有映像檔"
+      URL="$LOCAL_IMAGE"
+      USE_LOCAL_IMAGE=true
+    fi
+  else
+    msg_info "找到本地 Debian 13 映像檔 (修改於 $DIFF_DAYS 天前)"
+    URL="$LOCAL_IMAGE"
+    USE_LOCAL_IMAGE=true
+  fi
 else
-  msg_info "未找到本地映像檔，將從網路下載"
-  URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
+  msg_info "未找到本地映像檔或強制更新模式，將從網路下載"
+  URL="$REMOTE_URL"
   USE_LOCAL_IMAGE=false
 fi
 
@@ -910,8 +938,8 @@ if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
       msg_error "Failed to download Node Exporter from GitHub. Skipping installation."
     fi
 
-  # Create systemd service file
-  virt-customize -q -a "${FILE}" --run-command "cat > /etc/systemd/system/node_exporter.service << 'EOF'
+  # Create systemd service file - 修復語法錯誤
+  virt-customize -q -a "${FILE}" --run-command "cat > /etc/systemd/system/node_exporter.service << 'EOFMARKER'
 [Unit]
 Description=Prometheus Node Exporter
 Wants=network-online.target
@@ -925,7 +953,7 @@ ExecStart=/usr/local/bin/node_exporter
 
 [Install]
 WantedBy=multi-user.target
-EOF" >/dev/null &&
+EOFMARKER" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable node_exporter" >/dev/null
 
   msg_ok "Added Prometheus Node Exporter to Debian 13 Qcow2 Disk Image successfully"
