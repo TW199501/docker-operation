@@ -111,8 +111,13 @@ function cleanup() {
 
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-if whiptail --backtitle "Proxmox VE Helper Scripts" --title "Debian 13 VM" --yesno "This will create a New Debian 13 VM. Proceed?" 10 58; then
-  :
+if ACTION=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Debian 13 VM" --menu "This will create a new Debian 13 VM." 10 60 2 \
+  "proceed" "Start creation" \
+  "exit" "Cancel and quit" \
+  3>&1 1>&2 2>&3); then
+  if [ "$ACTION" = "exit" ]; then
+    header_info && echo -e "${CROSS}${RD}User exited script${CL}\n" && exit
+  fi
 else
   header_info && echo -e "${CROSS}${RD}User exited script${CL}\n" && exit
 fi
@@ -189,8 +194,16 @@ function arch_check() {
 function ssh_check() {
   if command -v pveversion >/dev/null 2>&1; then
     if [ -n "${SSH_CLIENT:+x}" ]; then
-      if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "SSH DETECTED" --yesno "It's suggested to use the Proxmox shell instead of SSH, since SSH can create issues while gathering variables. Would you like to proceed with using SSH?" 10 62; then
-        echo "you've been warned"
+      if SSH_DECISION=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "SSH DETECTED" --menu "It's suggested to use the Proxmox shell instead of SSH while gathering variables." 12 70 2 \
+        "proceed" "Continue over SSH (not recommended)" \
+        "exit" "Quit script" \
+        3>&1 1>&2 2>&3); then
+        if [ "$SSH_DECISION" = "exit" ]; then
+          clear
+          exit
+        else
+          echo "you've been warned"
+        fi
       else
         clear
         exit
@@ -234,9 +247,9 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-  if CLOUD_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --radiolist "Configure Cloud-Init?" 10 58 2 \
-    "yes" "Use genericcloud image (adds cloud-init drive)" OFF \
-    "no" "Use nocloud image (no cloud-init drive)" ON \
+  if CLOUD_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --menu "Configure Cloud-Init?" 10 58 2 \
+    "yes" "genericcloud image (adds cloud-init drive)" \
+    "no" "nocloud image (no cloud-init drive)" \
     3>&1 1>&2 2>&3); then
     if [ "$CLOUD_CHOICE" = "yes" ]; then
       CLOUD_INIT="yes"
@@ -250,9 +263,9 @@ function default_settings() {
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
 
-  if DOCKER_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --radiolist "Install Docker and Docker Compose before importing the image?" 10 58 2 \
-    "yes" "Embed Docker into the VM image" OFF \
-    "no" "Skip Docker installation" ON \
+  if DOCKER_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
+    "yes" "Embed Docker into the VM image" \
+    "no" "Skip Docker installation" \
     3>&1 1>&2 2>&3); then
     INSTALL_DOCKER="$DOCKER_CHOICE"
   else
@@ -281,9 +294,9 @@ function advanced_settings() {
     fi
   done
 
-  if MACH=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "MACHINE TYPE" --radiolist --cancel-button Exit-Script "Choose Type" 10 58 2 \
-    "i440fx" "Machine i440fx" ON \
-    "q35" "Machine q35" OFF \
+  if MACH=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "MACHINE TYPE" --cancel-button Exit-Script --menu "Choose Type" 10 58 2 \
+    "i440fx" "Machine i440fx" \
+    "q35" "Machine q35" \
     3>&1 1>&2 2>&3); then
     if [ $MACH = q35 ]; then
       echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}$MACH${CL}"
@@ -313,11 +326,11 @@ function advanced_settings() {
     exit-script
   fi
 
-  if DISK_CACHE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "DISK CACHE" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
-    "0" "None (Default)" ON \
-    "1" "Write Through" OFF \
+  if DISK_CACHE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "DISK CACHE" --cancel-button Exit-Script --menu "Choose cache mode" 10 58 2 \
+    "none" "None (Default)" \
+    "writethrough" "Write Through" \
     3>&1 1>&2 2>&3); then
-    if [ $DISK_CACHE = "1" ]; then
+    if [ "$DISK_CACHE" = "writethrough" ]; then
       echo -e "${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}Write Through${CL}"
       DISK_CACHE="cache=writethrough,"
     else
@@ -340,11 +353,11 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CPU_TYPE1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU MODEL" --radiolist "Choose" --cancel-button Exit-Script 10 58 2 \
-    "0" "KVM64 (Default)" ON \
-    "1" "Host" OFF \
+  if CPU_TYPE1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU MODEL" --cancel-button Exit-Script --menu "Choose CPU model" 10 58 2 \
+    "kvm64" "KVM64 (Default)" \
+    "host" "Host" \
     3>&1 1>&2 2>&3); then
-    if [ $CPU_TYPE1 = "1" ]; then
+    if [ "$CPU_TYPE1" = "host" ]; then
       echo -e "${OS}${BOLD}${DGN}CPU Model: ${BGN}Host${CL}"
       CPU_TYPE=" -cpu host"
     else
@@ -426,9 +439,9 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CLOUD_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --radiolist "Configure the VM with Cloud-init?" 10 58 2 \
-    "yes" "Use genericcloud image (adds cloud-init drive)" OFF \
-    "no" "Use nocloud image (no cloud-init drive)" ON \
+  if CLOUD_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --menu "Configure the VM with Cloud-init?" 10 58 2 \
+    "yes" "genericcloud image (adds cloud-init drive)" \
+    "no" "nocloud image (no cloud-init drive)" \
     3>&1 1>&2 2>&3); then
     CLOUD_INIT="$CLOUD_CHOICE"
   else
@@ -436,9 +449,9 @@ function advanced_settings() {
   fi
   echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}$CLOUD_INIT${CL}"
 
-  if DOCKER_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --radiolist "Install Docker and Docker Compose before importing the image?" 10 58 2 \
-    "yes" "Embed Docker into the VM image" OFF \
-    "no" "Skip Docker installation" ON \
+  if DOCKER_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
+    "yes" "Embed Docker into the VM image" \
+    "no" "Skip Docker installation" \
     3>&1 1>&2 2>&3); then
     INSTALL_DOCKER="$DOCKER_CHOICE"
   else
@@ -446,32 +459,47 @@ function advanced_settings() {
   fi
   echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}$INSTALL_DOCKER${CL}"
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --yesno "Start VM when completed?" 10 58); then
-    echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
-    START_VM="yes"
+  if START_DECISION=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --menu "Start VM when completed?" 10 58 2 \
+    "yes" "Start automatically" \
+    "no" "Do not start" \
+    3>&1 1>&2 2>&3); then
+    START_VM="$START_DECISION"
+    echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}$START_VM${CL}"
   else
-    echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}no${CL}"
-    START_VM="no"
+    exit-script
   fi
 
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create a Debian 13 VM?" --no-button Do-Over 10 58); then
-    echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above advanced settings${CL}"
+  if FINAL_STEP=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --menu "Ready to create the VM?" 10 60 2 \
+    "create" "Create Debian 13 VM" \
+    "redo" "Do-Over settings" \
+    3>&1 1>&2 2>&3); then
+    if [ "$FINAL_STEP" = "create" ]; then
+      echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above advanced settings${CL}"
+    else
+      header_info
+      echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
+      advanced_settings
+    fi
   else
-    header_info
-    echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
-    advanced_settings
+    exit-script
   fi
 }
 
 function start_script() {
-  if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "SETTINGS" --yesno "Use Default Settings?" --no-button Advanced 10 58); then
+  if MODE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "SETTINGS" --menu "Select configuration mode" 10 60 2 \
+    "default" "Use Default Settings" \
+    "advanced" "Customize settings" \
+    3>&1 1>&2 2>&3); then
     header_info
-    echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings${CL}"
-    default_settings
+    if [ "$MODE" = "default" ]; then
+      echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings${CL}"
+      default_settings
+    else
+      echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
+      advanced_settings
+    fi
   else
-    header_info
-    echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings${CL}"
-    advanced_settings
+    header_info && echo -e "${CROSS}${RD}User exited script${CL}\n" && exit
   fi
 }
 
