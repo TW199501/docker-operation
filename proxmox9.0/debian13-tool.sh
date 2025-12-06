@@ -82,33 +82,22 @@ function msg_error() {
 
 # 設置 root 密碼
 function set_root_password() {
-  msg_info "正在設置 root 用戶密碼..."
-
   while true; do
-    # 輸入密碼
-    read -rs -p "請輸入 root 用戶的新密碼: " ROOT_PASSWORD
-    echo
-
-    # 確認密碼
-    read -rs -p "請再次輸入密碼以確認: " ROOT_PASSWORD_CONFIRM
-    echo
-
-    # 檢查密碼是否匹配
+    ROOT_PASSWORD=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT PASSWORD" --passwordbox "請輸入 root 用戶的新密碼" 10 60 3>&1 1>&2 2>&3) || return
+    ROOT_PASSWORD_CONFIRM=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT PASSWORD" --passwordbox "請再次輸入以確認" 10 60 3>&1 1>&2 2>&3) || return
+    if [ -z "$ROOT_PASSWORD" ]; then
+      whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "密碼不能為空" 8 50
+      continue
+    fi
     if [ "$ROOT_PASSWORD" = "$ROOT_PASSWORD_CONFIRM" ]; then
-      if [ -n "$ROOT_PASSWORD" ]; then
-        # 設置密碼
-        echo "root:$ROOT_PASSWORD" | chpasswd
-        if [ $? -eq 0 ]; then
-          msg_ok "✓ root 用戶密碼設置成功"
-          break
-        else
-          msg_error "✗ 密碼設置失敗，請重試"
-        fi
+      if echo "root:$ROOT_PASSWORD" | chpasswd; then
+        msg_ok "root 用戶密碼設置成功"
+        break
       else
-        msg_error "✗ 密碼不能為空，請重試"
+        whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "密碼設置失敗，請再試一次" 8 60
       fi
     else
-      msg_error "✗ 兩次輸入的密碼不匹配，請重試"
+      whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "兩次輸入不一致，請重試" 8 60
     fi
   done
 }
@@ -179,74 +168,46 @@ function disable_ipv6() {
 
 # 配置固定IP地址
 function configure_static_ip() {
-  msg_info "正在配置固定IP地址..."
-
-  # 詢問是否同時禁用 IPv6
-  read -r -p "是否在配置固定IP時禁用 IPv6? (y/N): " DISABLE_IPV6
-  if [[ "$DISABLE_IPV6" =~ ^[Yy]$ ]]; then
+  if whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" --yesno "配置固定 IP 時是否同時禁用 IPv6？" 10 60; then
     disable_ipv6
   fi
 
-  # 獲取當前網絡接口
-  INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-  if [ -z "$INTERFACE" ]; then
-    INTERFACE="eth0"  # 默認接口名
+  INTERFACE=$(ip route | awk '/default/ {print $5; exit}')
+  INTERFACE=${INTERFACE:-eth0}
+  CURRENT_IP=$(ip -4 addr show "$INTERFACE" | awk '/inet / {print $2}' | cut -d/ -f1 | head -1)
+
+  while true; do
+    STATIC_IP=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" --inputbox "請輸入固定 IP (目前: ${CURRENT_IP:-無})" 10 60 "${CURRENT_IP}" 3>&1 1>&2 2>&3) || return
+    if [[ $STATIC_IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+      IFS='.' read -r ip1 ip2 ip3 ip4 <<<"$STATIC_IP"
+      if [[ $ip1 -le 255 && $ip2 -le 255 && $ip3 -le 255 && $ip4 -le 255 ]]; then
+        break
+      fi
+    fi
+    whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "IP 格式無效，請重新輸入" 8 50
+  done
+
+  SUBNET_MASK="255.255.255.0"
+  DNS="8.8.8.8"
+
+  CURRENT_GATEWAY=$(ip route | awk '/default/ {print $3; exit}')
+  if [ -n "$CURRENT_GATEWAY" ]; then
+    if whiptail --backtitle "ELF Debian13 ALL IN" --yesno "偵測到網關 ${CURRENT_GATEWAY}\n要使用此設定嗎？" 10 60; then
+      GATEWAY="$CURRENT_GATEWAY"
+    fi
   fi
 
-  # 顯示當前網絡配置
-  msg_info "當前網絡接口: $INTERFACE"
-  ip addr show $INTERFACE
-
-  # 輸入固定IP地址
-  while true; do
-    read -r -p "請輸入固定IP地址 (例如: 192.168.1.100): " STATIC_IP
-    if [ -n "$STATIC_IP" ]; then
-      # 驗證IP地址格式
-      if [[ $STATIC_IP =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-        IFS='.' read -r ip1 ip2 ip3 ip4 <<< "$STATIC_IP"
-        if [[ $ip1 -le 255 && $ip2 -le 255 && $ip3 -le 255 && $ip4 -le 255 ]]; then
+  if [ -z "$GATEWAY" ]; then
+    while true; do
+      GATEWAY=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" --inputbox "請輸入網關 (例如 192.168.25.254)" 10 60 3>&1 1>&2 2>&3) || return
+      if [[ $GATEWAY =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        IFS='.' read -r g1 g2 g3 g4 <<<"$GATEWAY"
+        if [[ $g1 -le 255 && $g2 -le 255 && $g3 -le 255 && $g4 -le 255 ]]; then
           break
         fi
       fi
-      msg_error "✗ IP地址格式無效，請重新輸入"
-    else
-      msg_error "✗ IP地址不能為空"
-    fi
-  done
-
-  # 自動計算子網掩碼
-  SUBNET_MASK="255.255.255.0"  # 默認子網掩碼
-  DNS="8.8.8.8"                # 默認DNS
-
-  # 嘗試自動檢測網關
-  CURRENT_GATEWAY=$(ip route | grep default | awk '{print $3}' | head -1)
-  if [ -n "$CURRENT_GATEWAY" ]; then
-    msg_info "檢測到當前網關: $CURRENT_GATEWAY"
-    read -r -p "是否使用此網關? (Y/n): " USE_DETECTED_GATEWAY
-    if [[ "$USE_DETECTED_GATEWAY" =~ ^[Nn]$ ]]; then
-      CURRENT_GATEWAY=""
-    fi
-  fi
-
-  # 如果沒有檢測到網關或用戶選擇不使用，讓用戶手動輸入
-  if [ -z "$CURRENT_GATEWAY" ]; then
-    while true; do
-      read -r -p "請輸入網關地址 (例如: 192.168.25.254): " GATEWAY
-      if [ -n "$GATEWAY" ]; then
-        # 驗證網關IP地址格式
-        if [[ $GATEWAY =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-          IFS='.' read -r g1 g2 g3 g4 <<< "$GATEWAY"
-          if [[ $g1 -le 255 && $g2 -le 255 && $g3 -le 255 && $g4 -le 255 ]]; then
-            break
-          fi
-        fi
-        msg_error "✗ 網關地址格式無效，請重新輸入"
-      else
-        msg_error "✗ 網關地址不能為空"
-      fi
+      whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "網關格式無效，請重新輸入" 8 50
     done
-  else
-    GATEWAY="$CURRENT_GATEWAY"
   fi
 
   # 備份原始網絡配置

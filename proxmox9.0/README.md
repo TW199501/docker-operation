@@ -18,19 +18,16 @@
 
 #### 使用方法
 
-##### 本地執行
+| 階段 | 目的 | 操作 |
+| --- | --- | --- |
+| 第 1 階段：`debian13-vm.sh` | 在 Proxmox 主機上建立 Debian 13 VM，並可選擇是否預嵌 Docker/Cloud-init | `sudo bash debian13-vm.sh` 或遠端 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"` |
+| 第 2 階段：`debian13-tool.sh` | 進入 VM 內執行互動式維護（帳號/SSH、Docker、網路、磁碟、排程等） | `sudo bash /path/to/debian13-tool.sh` |
 
-```bash
-# 在 Proxmox VE 主機上執行
-sudo bash debian13-vm.sh
-```
-
-##### 遠程安裝 (推薦)
-
-```bash
-# 從 GitHub 直接下載並執行
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"
-```
+> 🔁 **建議流程**  
+>
+> 1. 在 Proxmox 主機執行第 1 階段腳本建立 VM。  
+> 2. 開機後登入 VM（SSH 或 Proxmox Console），執行第 2 階段工具，依 whiptail 選單逐一完成安裝/設定。  
+> 3. 若第 1 階段需要指定 DNS 供 `virt-customize` 使用，可先設定 `export LIBGUESTFS_RESOLV_CONF_PATH=/etc/resolv.conf`（或自訂檔案）再啟動腳本。
 
 #### 支援的 Proxmox VE 版本
 
@@ -39,7 +36,21 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operatio
 
 ### 2. `debian13-tool.sh` - Debian 13 工具腳本
 
-額外的工具和維護腳本。
+第二階段的互動式維護工具，使用 whiptail 介面提供以下功能：
+
+- 帳號 / SSH：設定 root 密碼、啟用 SSH（允許 root 登入）以及安裝 `qemu-guest-agent`
+- Docker / Compose：在 VM 內安裝 Docker Engine、Containerd 與 Docker Compose
+- 網路設定：自動偵測介面 / gateway / DNS，配置固定 IP、檢查 IP 衝突、禁用 IPv6、套用網路優化
+- 系統與磁碟：大檔處理優化、磁碟擴容（含 LVM）、BBR/fq 等網路 stack 調整
+- 排程維護：設定每月 / 季 / 半年的 log 清理排程（cron），可隨時停用
+
+> 執行方式：在完成第一階段 VM 安裝後登入虛擬機，直接執行：
+>
+> ```bash
+> sudo bash /path/to/debian13-tool.sh
+> ```
+>
+> 依畫面選單逐一操作即可。
 
 ### 3. `lxc.sh` - LXC 容器管理腳本
 
