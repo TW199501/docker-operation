@@ -1,0 +1,6 @@
+K8S_REPO_VERSION="${K8S_REPO_VERSION:-v1.28}"
+K8S_REPO_BASE_URL="${K8S_REPO_BASE_URL:-https://pkgs.k8s.io/core:/stable:/${K8S_REPO_VERSION}/deb}"
+POD_NETWORK_CIDR="${POD_NETWORK_CIDR:-10.244.0.0/16}"
+CNI_PLUGIN="${CNI_PLUGIN:-flannel}"
+FLANNEL_MANIFEST_URL="${FLANNEL_MANIFEST_URL:-https://github.com/coreos/flannel/raw/master/Documentation/kube-flannel.yml}"
+CALICO_MANIFEST_URL="${CALICO_MANIFEST_URL:-https://docs.projectcalico.org/manifests/calico.yaml}"

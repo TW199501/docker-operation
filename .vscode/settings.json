@@ -45,7 +45,7 @@
 ],
 
 // 預設掃整個 workspace
-"todo-tree.tree.scanMode": "workspace",
+"todo-tree.tree.scanMode": "open files",
 "todo-tree.general.enableFileWatcher": true,
 
 // Tree 呈現習慣

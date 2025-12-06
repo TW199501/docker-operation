@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Kubernetes 應用部署腳本
 # 支持 Proxmox 8.0-9.0 環境

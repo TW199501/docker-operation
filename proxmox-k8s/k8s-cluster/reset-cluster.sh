@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Kubernetes 集群重置腳本
 # 支持 Proxmox 8.0-9.0 環境
@@ -102,6 +103,13 @@ main() {
   if [[ ! $confirm =~ ^[Yy]$ ]]; then
     echo_green "操作已取消"
     exit 0
+  fi
+
+  current_hostname="$(hostname)"
+  read -r -p "請輸入當前節點主機名以確認 (${current_hostname}): " hostname_confirm
+  if [ "$hostname_confirm" != "$current_hostname" ]; then
+    echo_red "主機名不匹配，已取消重置"
+    exit 1
   fi
 
   check_root

@@ -1,4 +1,13 @@
 #!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/k8s-config.sh" ]; then
+  . "$SCRIPT_DIR/k8s-config.sh"
+else
+  K8S_REPO_VERSION="${K8S_REPO_VERSION:-v1.28}"
+  K8S_REPO_BASE_URL="${K8S_REPO_BASE_URL:-https://pkgs.k8s.io/core:/stable:/${K8S_REPO_VERSION}/deb}"
+fi
 
 # Kubernetes Worker 節點加入腳本
 # 支持 Proxmox 8.0-9.0 環境
@@ -88,10 +97,10 @@ install_kubernetes() {
   echo_yellow "正在安裝 Kubernetes 組件..."
 
   # 添加 Kubernetes 官方 GPG 密鑰
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  curl -fsSL "${K8S_REPO_BASE_URL}/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
   # 添加 Kubernetes 官方倉庫
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+  echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] ${K8S_REPO_BASE_URL} /" | tee /etc/apt/sources.list.d/kubernetes.list
 
   # 安裝 Kubernetes 組件
   apt update
@@ -107,7 +116,7 @@ configure_system() {
 
   # 禁用 swap
   swapoff -a
-  sed -i '/ swap / s/^(.*)$/#1/g' /etc/fstab
+  sed -i '/ swap / s/^/#/' /etc/fstab
 
   # 加載必要的內核模塊
 cat <<EOF | tee /etc/modules-load.d/k8s.conf
@@ -132,15 +141,22 @@ EOF
 join_cluster() {
   echo_yellow "正在加入 Kubernetes 集群..."
 
+  local join_cmd="${1:-}"
+
   # 檢查是否提供了 join 命令
-  if [ -z "$1" ]; then
+  if [ -z "$join_cmd" ]; then
     echo_red "錯誤：請提供從 Master 節點獲取的 join 命令"
     echo_yellow "使用方法：./join-worker.sh \"kubeadm join ...\""
+    read -r -p "> " join_cmd
+  fi
+
+  if [ -z "$join_cmd" ]; then
+    echo_red "錯誤：未提供有效的 join 命令"
     exit 1
   fi
 
   # 執行 join 命令
-  $1
+  eval "$join_cmd"
 
   echo_green "Worker 節點已成功加入集群"
 }
@@ -159,7 +175,9 @@ main() {
   configure_docker
   install_kubernetes
   configure_system
-  join_cluster "$1"
+
+  local join_cmd="${1:-}"
+  join_cluster "$join_cmd"
 
   echo_green "==========================================="
   echo_green "Worker 節點配置完成！"
@@ -172,5 +190,5 @@ main() {
 if [ $# -gt 0 ]; then
   main "$*"
 else
-  main
+  main ""
 fi

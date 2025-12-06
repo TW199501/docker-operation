@@ -1,4 +1,17 @@
 #!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/k8s-config.sh" ]; then
+  . "$SCRIPT_DIR/k8s-config.sh"
+else
+  K8S_REPO_VERSION="${K8S_REPO_VERSION:-v1.28}"
+  K8S_REPO_BASE_URL="${K8S_REPO_BASE_URL:-https://pkgs.k8s.io/core:/stable:/${K8S_REPO_VERSION}/deb}"
+  POD_NETWORK_CIDR="${POD_NETWORK_CIDR:-10.244.0.0/16}"
+  CNI_PLUGIN="${CNI_PLUGIN:-flannel}"
+  FLANNEL_MANIFEST_URL="${FLANNEL_MANIFEST_URL:-https://github.com/coreos/flannel/raw/master/Documentation/kube-flannel.yml}"
+  CALICO_MANIFEST_URL="${CALICO_MANIFEST_URL:-https://docs.projectcalico.org/manifests/calico.yaml}"
+fi
 
 # Kubernetes 集群創建腳本
 # 支持 Proxmox 8.0-9.0 環境
@@ -92,10 +105,10 @@ install_kubernetes() {
   echo_yellow "正在安裝 Kubernetes 組件..."
 
   # 添加 Kubernetes 官方 GPG 密鑰
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  curl -fsSL "${K8S_REPO_BASE_URL}/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
   # 添加 Kubernetes 官方倉庫
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+  echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] ${K8S_REPO_BASE_URL} /" | tee /etc/apt/sources.list.d/kubernetes.list
 
   # 安裝 Kubernetes 組件
   apt update
@@ -111,7 +124,7 @@ configure_system() {
 
   # 禁用 swap
   swapoff -a
-  sed -i '/ swap / s/^(.*)$/#1/g' /etc/fstab
+  sed -i '/ swap / s/^/#/' /etc/fstab
 
   # 加載必要的內核模塊
 cat <<EOF | tee /etc/modules-load.d/k8s.conf
@@ -137,7 +150,7 @@ init_master() {
   echo_yellow "正在初始化 Kubernetes Master 節點..."
 
   # 初始化集群
-  kubeadm init --pod-network-cidr=10.244.0.0/16
+  kubeadm init --pod-network-cidr="${POD_NETWORK_CIDR}"
 
   # 配置 kubectl
 cat <<EOF | tee /root/.bashrc
@@ -161,7 +174,11 @@ install_network_plugin() {
   echo_yellow "正在安裝 Pod 網絡插件..."
 
   # 安裝 Flannel 網絡插件
-  kubectl apply -f https://github.com/coreos/flannel/raw/master/Documentation/kube-flannel.yml
+  if [ "${CNI_PLUGIN}" = "calico" ]; then
+    kubectl apply -f "${CALICO_MANIFEST_URL}"
+  else
+    kubectl apply -f "${FLANNEL_MANIFEST_URL}"
+  fi
 
   echo_green "Pod 網絡插件安裝完成"
 }
