@@ -497,8 +497,9 @@ btrfs)
   THIN=""
   ;;
 zfs | zfspool)
-  DISK_EXT=".img"
-  DISK_REF="$VMID/"
+  # ZFS / ZFSpool use volume names like 'vm-<VMID>-disk-0' without subdirectories or extensions
+  DISK_EXT=""
+  DISK_REF=""
   DISK_IMPORT="-format raw"
   FORMAT=",efitype=4m"
   THIN=""
@@ -526,8 +527,14 @@ lvm | lvm-thin)
 esac
 for i in {0,1}; do
   disk="DISK$i"
-  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
-  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+  if [[ "$STORAGE_TYPE" == "zfs" || "$STORAGE_TYPE" == "zfspool" ]]; then
+    # ZFS/ZFSpool volumes are top-level and have no file extension
+    eval DISK${i}=vm-${VMID}-disk-${i}
+    eval DISK${i}_REF=${STORAGE}:${!disk}
+  else
+    eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
+    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+  fi
 done
 
 if ! command -v virt-customize &>/dev/null; then
@@ -541,7 +548,7 @@ fi
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,lsb-release >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
