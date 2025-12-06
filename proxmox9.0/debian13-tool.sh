@@ -696,6 +696,7 @@ EOF
     monthly) cron_expr="0 3 1 * *" ;;
     quarterly) cron_expr="0 3 1 */3 *" ;;
     semiannual) cron_expr="0 3 1 */6 *" ;;
+    *) return 1 ;;
   esac
 
   cat >/etc/cron.d/elf-log-cleanup <<EOF
@@ -718,6 +719,7 @@ function account_menu() {
       ssh) configure_ssh ;;
       guest) install_guest_agent ;;
       back) break ;;
+      *) break ;;
     esac
   done
 }
@@ -734,6 +736,7 @@ function docker_menu() {
       docker) install_docker_stack ;;
       guest) install_guest_agent ;;
       back) break ;;
+      *) break ;;
     esac
   done
 }
@@ -752,6 +755,7 @@ function network_menu() {
       ipv6) disable_ipv6 ;;
       opt) optimize_network_stack ;;
       back) break ;;
+      *) break ;;
     esac
   done
 }
@@ -770,6 +774,7 @@ function system_menu() {
       disk) expand_disk ;;
       log) schedule_log_cleanup ;;
       back) break ;;
+      *) break ;;
     esac
   done
 }
@@ -790,6 +795,7 @@ function main_menu() {
       system) system_menu ;;
       docker) docker_menu ;;
       quit) exit 0 ;;
+      *) break ;;
     esac
   done
 }

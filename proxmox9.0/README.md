@@ -18,15 +18,18 @@
 
 #### 使用方法
 
-| 階段 | 目的 | 操作 |
-| --- | --- | --- |
-| 第 1 階段：`debian13-vm.sh` | 在 Proxmox 主機上建立 Debian 13 VM，並可選擇是否預嵌 Docker/Cloud-init | `sudo bash debian13-vm.sh` 或遠端 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"` |
-| 第 2 階段：`debian13-tool.sh` | 進入 VM 內執行互動式維護（帳號/SSH、Docker、網路、磁碟、排程等） | `sudo bash /path/to/debian13-tool.sh` |
+第 1 階段：`debian13-vm.sh`  
+在 Proxmox 主機上建立 Debian 13 VM，並可選擇是否預嵌 Docker/Cloud-init。  
+執行方式：`sudo bash debian13-vm.sh` 或遠端 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"`。
 
-> 🔁 **建議流程**  
+第 2 階段：`debian13-tool.sh`  
+進入 VM 內執行互動式維護（帳號/SSH、Docker、網路、磁碟、排程等）。  
+執行方式：`sudo bash /path/to/debian13-tool.sh` 或遠端 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-tool.sh)"`。
+
+> 🔁 **建議流程**
 >
-> 1. 在 Proxmox 主機執行第 1 階段腳本建立 VM。  
-> 2. 開機後登入 VM（SSH 或 Proxmox Console），執行第 2 階段工具，依 whiptail 選單逐一完成安裝/設定。  
+> 1. 在 Proxmox 主機執行第 1 階段腳本建立 VM。
+> 2. 開機後登入 VM（SSH 或 Proxmox Console），執行第 2 階段工具，依 whiptail 選單逐一完成安裝/設定。
 > 3. 若第 1 階段需要指定 DNS 供 `virt-customize` 使用，可先設定 `export LIBGUESTFS_RESOLV_CONF_PATH=/etc/resolv.conf`（或自訂檔案）再啟動腳本。
 
 #### 支援的 Proxmox VE 版本

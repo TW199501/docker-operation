@@ -6,7 +6,7 @@
 
 ## 目錄結構
 
-```
+```text
 proxmox-k8s/
 ├── README.md
 ├── Makefile
