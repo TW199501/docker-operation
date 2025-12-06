@@ -18,119 +18,113 @@ jobs:
   trivy-security-scan:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
 
-    - name: Upload Trivy scan results to GitHub Security tab
-<<<<<<< HEAD
-      # 避免 fork PR 上因權限不足導致失敗
-      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-=======
->>>>>>> 85e42885cbd1288ab25ea1cf4ebf74df21571d03
-      uses: github/codeql-action/upload-sarif@v4
-      with:
-        sarif_file: 'trivy-results.sarif'
+      - name: Upload Trivy scan results to GitHub Security tab
+        # 避免 fork PR 上因權限不足導致失敗
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
 
   shell-script-security:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Install shellcheck
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y shellcheck
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
 
-    - name: Run shellcheck security scan
-      run: |
-        find . -name "*.sh" -type f -exec shellcheck --severity=warning {} \; || true
+      - name: Run shellcheck security scan
+        run: |
+          find . -name "*.sh" -type f -exec shellcheck --severity=warning {} \; || true
 
   secrets-detection:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Run gitleaks for secrets detection
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run gitleaks for secrets detection
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   dependency-check:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-    - name: Check package.json security
-      run: |
-        if [ -f "package.json" ]; then
-          npm audit --audit-level moderate || true
-        fi
+      - name: Check package.json security
+        run: |
+          if [ -f "package.json" ]; then
+            npm audit --audit-level moderate || true
+          fi
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Check Python dependencies
-      run: |
-        if [ -f "requirements.txt" ]; then
-          pip install safety
-          safety check --full-report || true
-        fi
+      - name: Check Python dependencies
+        run: |
+          if [ -f "requirements.txt" ]; then
+            pip install safety
+            safety check --full-report || true
+          fi
 
   codeql-analysis:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
-      with:
-        languages: javascript, python
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript, python
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v4
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
 
   docker-security:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Run Docker security scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'config'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'docker-security-results.sarif'
+      - name: Run Docker security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'docker-security-results.sarif'
 
-    - name: Upload Docker security results
-<<<<<<< HEAD
-      # 避免 fork PR 上因權限不足導致失敗
-      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-=======
->>>>>>> 85e42885cbd1288ab25ea1cf4ebf74df21571d03
-      uses: github/codeql-action/upload-sarif@v4
-      with:
-        sarif_file: 'docker-security-results.sarif'
+      - name: Upload Docker security results
+        # 避免 fork PR 上因權限不足導致失敗
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'docker-security-results.sarif'

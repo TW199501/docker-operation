@@ -29,6 +29,8 @@ var_os="debian"
 var_version="13"
 INSTALL_DOCKER="no"
 LIBGUESTFS_RESOLV_CONF_PATH="${LIBGUESTFS_RESOLV_CONF:-}"
+POST_INSTALL_MESSAGE="no"
+POST_INSTALL_DETAILS=""
 
 YW=$(echo "\033[33m")
 BL=$(echo "\033[36m")
@@ -111,7 +113,7 @@ function cleanup() {
 
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-if ACTION=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Debian 13 VM" --menu "This will create a new Debian 13 VM." 10 60 2 \
+if ACTION=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Debian 13 VM" --menu "This will create a new Debian 13 VM." 10 60 2 \
   "proceed" "Start creation" \
   "exit" "Cancel and quit" \
   3>&1 1>&2 2>&3); then
@@ -135,6 +137,86 @@ function msg_ok() {
 function msg_error() {
   local msg="$1"
   echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
+}
+
+function queue_post_boot_install() {
+  local install_docker="$1"
+  local script_path="$TEMP_DIR/elf-postinstall.sh"
+  local service_path="$TEMP_DIR/elf-postinstall.service"
+
+  msg_info "Scheduling post-boot installation inside the VM"
+
+  cat >"$script_path" <<'EOF'
+#!/bin/bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+log="/var/log/elf-postinstall.log"
+exec >>"$log" 2>&1
+apt-get update -qq
+apt-get install -y qemu-guest-agent
+EOF
+
+  if [ "$install_docker" = "yes" ]; then
+    cat >>"$script_path" <<'EOF'
+curl -fsSL https://get.docker.com | sh
+systemctl enable --now docker || true
+EOF
+  fi
+
+  cat >>"$script_path" <<'EOF'
+systemctl enable --now qemu-guest-agent || true
+rm -f /root/elf-postinstall.sh
+rm -f /etc/systemd/system/elf-postinstall.service
+systemctl daemon-reload || true
+EOF
+
+  cat >"$service_path" <<'EOF'
+[Unit]
+Description=ELF Debian13 post-install tasks
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/elf-postinstall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  virt-customize -a "${FILE}" --copy-in "$script_path":/root >/dev/null || return 1
+  virt-customize -a "${FILE}" --copy-in "$service_path":/etc/systemd/system >/dev/null || return 1
+  virt-customize -a "${FILE}" --run-command "chmod +x /root/elf-postinstall.sh" >/dev/null || return 1
+  virt-customize -a "${FILE}" --run-command "ln -sf /etc/systemd/system/elf-postinstall.service /etc/systemd/system/multi-user.target.wants/elf-postinstall.service" >/dev/null || return 1
+
+  POST_INSTALL_MESSAGE="yes"
+  if [ "$install_docker" = "yes" ]; then
+    POST_INSTALL_DETAILS="Docker 與 qemu-guest-agent 將在 VM 第一次啟動時自動安裝。請保持 VM 連上網路。"
+  else
+    POST_INSTALL_DETAILS="qemu-guest-agent 將在 VM 第一次啟動時自動安裝。請保持 VM 連上網路。"
+  fi
+  msg_ok "已安排開機後自動安裝"
+  return 0
+}
+
+function embed_docker_stack() {
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null || return 1
+  return 0
+}
+
+function embed_guest_agent_only() {
+  virt-customize -q -a "${FILE}" --install qemu-guest-agent >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null || return 1
+  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null || return 1
+  return 0
 }
 
 function check_root() {
@@ -194,7 +276,7 @@ function arch_check() {
 function ssh_check() {
   if command -v pveversion >/dev/null 2>&1; then
     if [ -n "${SSH_CLIENT:+x}" ]; then
-      if SSH_DECISION=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "SSH DETECTED" --menu "It's suggested to use the Proxmox shell instead of SSH while gathering variables." 12 70 2 \
+      if SSH_DECISION=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "SSH DETECTED" --menu "It's suggested to use the Proxmox shell instead of SSH while gathering variables." 12 70 2 \
         "proceed" "Continue over SSH (not recommended)" \
         "exit" "Quit script" \
         3>&1 1>&2 2>&3); then
@@ -247,7 +329,7 @@ function default_settings() {
   echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
   echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-  if CLOUD_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --menu "Configure Cloud-Init?" 10 58 2 \
+  if CLOUD_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "CLOUD-INIT" --menu "Configure Cloud-Init?" 10 58 2 \
     "yes" "genericcloud image (adds cloud-init drive)" \
     "no" "nocloud image (no cloud-init drive)" \
     3>&1 1>&2 2>&3); then
@@ -263,7 +345,7 @@ function default_settings() {
   echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
   echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 13 VM using the above default settings${CL}"
 
-  if DOCKER_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
+  if DOCKER_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
     "yes" "Embed Docker into the VM image" \
     "no" "Skip Docker installation" \
     3>&1 1>&2 2>&3); then
@@ -278,7 +360,7 @@ function advanced_settings() {
   METHOD="advanced"
   [ -z "${VMID:-}" ] && VMID=$(get_valid_nextid)
   while true; do
-    if VMID=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Virtual Machine ID" 8 58 $VMID --title "VIRTUAL MACHINE ID" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+    if VMID=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set Virtual Machine ID" 8 58 $VMID --title "VIRTUAL MACHINE ID" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
       if [ -z "$VMID" ]; then
         VMID=$(get_valid_nextid)
       fi
@@ -294,7 +376,7 @@ function advanced_settings() {
     fi
   done
 
-  if MACH=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "MACHINE TYPE" --cancel-button Exit-Script --menu "Choose Type" 10 58 2 \
+  if MACH=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "MACHINE TYPE" --cancel-button Exit-Script --menu "Choose Type" 10 58 2 \
     "i440fx" "Machine i440fx" \
     "q35" "Machine q35" \
     3>&1 1>&2 2>&3); then
@@ -311,7 +393,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if DISK_SIZE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Disk Size in GiB (e.g., 10, 20)" 8 58 "$DISK_SIZE" --title "DISK SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if DISK_SIZE=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set Disk Size in GiB (e.g., 10, 20)" 8 58 "$DISK_SIZE" --title "DISK SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     DISK_SIZE=$(echo "$DISK_SIZE" | tr -d ' ')
     if [[ "$DISK_SIZE" =~ ^[0-9]+$ ]]; then
       DISK_SIZE="${DISK_SIZE}G"
@@ -326,7 +408,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if DISK_CACHE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "DISK CACHE" --cancel-button Exit-Script --menu "Choose cache mode" 10 58 2 \
+  if DISK_CACHE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "DISK CACHE" --cancel-button Exit-Script --menu "Choose cache mode" 10 58 2 \
     "none" "None (Default)" \
     "writethrough" "Write Through" \
     3>&1 1>&2 2>&3); then
@@ -341,7 +423,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if VM_NAME=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Hostname" 8 58 debian --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if VM_NAME=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set Hostname" 8 58 debian --title "HOSTNAME" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $VM_NAME ]; then
       HN="debian"
       echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}$HN${CL}"
@@ -353,7 +435,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CPU_TYPE1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU MODEL" --cancel-button Exit-Script --menu "Choose CPU model" 10 58 2 \
+  if CPU_TYPE1=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "CPU MODEL" --cancel-button Exit-Script --menu "Choose CPU model" 10 58 2 \
     "kvm64" "KVM64 (Default)" \
     "host" "Host" \
     3>&1 1>&2 2>&3); then
@@ -368,7 +450,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CORE_COUNT=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Allocate CPU Cores" 8 58 2 --title "CORE COUNT" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if CORE_COUNT=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Allocate CPU Cores" 8 58 2 --title "CORE COUNT" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $CORE_COUNT ]; then
       CORE_COUNT="2"
       echo -e "${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}$CORE_COUNT${CL}"
@@ -379,7 +461,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if RAM_SIZE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Allocate RAM in MiB" 8 58 2048 --title "RAM" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if RAM_SIZE=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Allocate RAM in MiB" 8 58 2048 --title "RAM" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $RAM_SIZE ]; then
       RAM_SIZE="2048"
       echo -e "${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}$RAM_SIZE${CL}"
@@ -390,7 +472,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if BRG=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a Bridge" 8 58 vmbr0 --title "BRIDGE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if BRG=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set a Bridge" 8 58 vmbr0 --title "BRIDGE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $BRG ]; then
       BRG="vmbr0"
       echo -e "${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}$BRG${CL}"
@@ -401,7 +483,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if MAC1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a MAC Address" 8 58 $GEN_MAC --title "MAC ADDRESS" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if MAC1=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set a MAC Address" 8 58 $GEN_MAC --title "MAC ADDRESS" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $MAC1 ]; then
       MAC="$GEN_MAC"
       echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}$MAC${CL}"
@@ -413,7 +495,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if VLAN1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a Vlan(leave blank for default)" 8 58 --title "VLAN" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if VLAN1=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set a Vlan(leave blank for default)" 8 58 --title "VLAN" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $VLAN1 ]; then
       VLAN1="Default"
       VLAN=""
@@ -426,7 +508,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if MTU1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Interface MTU Size (leave blank for default)" 8 58 --title "MTU SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
+  if MTU1=$(whiptail --backtitle "ELF Debian13 ALL IN" --inputbox "Set Interface MTU Size (leave blank for default)" 8 58 --title "MTU SIZE" --cancel-button Exit-Script 3>&1 1>&2 2>&3); then
     if [ -z $MTU1 ]; then
       MTU1="Default"
       MTU=""
@@ -439,7 +521,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if CLOUD_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "CLOUD-INIT" --menu "Configure the VM with Cloud-init?" 10 58 2 \
+  if CLOUD_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "CLOUD-INIT" --menu "Configure the VM with Cloud-init?" 10 58 2 \
     "yes" "genericcloud image (adds cloud-init drive)" \
     "no" "nocloud image (no cloud-init drive)" \
     3>&1 1>&2 2>&3); then
@@ -449,7 +531,7 @@ function advanced_settings() {
   fi
   echo -e "${CLOUD}${BOLD}${DGN}Configure Cloud-init: ${BGN}$CLOUD_INIT${CL}"
 
-  if DOCKER_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
+  if DOCKER_CHOICE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "INSTALL DOCKER" --menu "Install Docker and Docker Compose before importing the image?" 10 58 2 \
     "yes" "Embed Docker into the VM image" \
     "no" "Skip Docker installation" \
     3>&1 1>&2 2>&3); then
@@ -459,7 +541,7 @@ function advanced_settings() {
   fi
   echo -e "${CLOUD}${BOLD}${DGN}Install Docker: ${BGN}$INSTALL_DOCKER${CL}"
 
-  if START_DECISION=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "START VIRTUAL MACHINE" --menu "Start VM when completed?" 10 58 2 \
+  if START_DECISION=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "START VIRTUAL MACHINE" --menu "Start VM when completed?" 10 58 2 \
     "yes" "Start automatically" \
     "no" "Do not start" \
     3>&1 1>&2 2>&3); then
@@ -469,7 +551,7 @@ function advanced_settings() {
     exit-script
   fi
 
-  if FINAL_STEP=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --menu "Ready to create the VM?" 10 60 2 \
+  if FINAL_STEP=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ADVANCED SETTINGS COMPLETE" --menu "Ready to create the VM?" 10 60 2 \
     "create" "Create Debian 13 VM" \
     "redo" "Do-Over settings" \
     3>&1 1>&2 2>&3); then
@@ -486,7 +568,7 @@ function advanced_settings() {
 }
 
 function start_script() {
-  if MODE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "SETTINGS" --menu "Select configuration mode" 10 60 2 \
+  if MODE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "SETTINGS" --menu "Select configuration mode" 10 60 2 \
     "default" "Use Default Settings" \
     "advanced" "Customize settings" \
     3>&1 1>&2 2>&3); then
@@ -531,7 +613,7 @@ elif [ $((${#STORAGE_MENU[@]} / 3)) -eq 1 ]; then
   STORAGE=${STORAGE_MENU[0]}
 else
   while [ -z "${STORAGE:+x}" ]; do
-    STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
+    STORAGE=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Storage Pools" --radiolist \
       "Which storage pool would you like to use for ${HN}?\nTo make a selection, use the Spacebar.\n" \
       16 $(($MSG_MAX_LENGTH + 23)) 6 \
       "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)

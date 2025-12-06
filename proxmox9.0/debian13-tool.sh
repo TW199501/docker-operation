@@ -23,18 +23,14 @@ export LANG=C
 function header_info {
   clear
   cat <<"EOF"
-    ____       __    _               ________  __  _______
-   / __ \___  / /_  (_)___ _____    /_  __/ / / / /_  __/
-  / / / / _ \/ __ \/ / __ `/ __ \    / / / / / /   / /
- / /_/ /  __/ /_/ / / /_/ / / / /   / / / /_/ /   / /
-/_____/\___/_.___/_/\__,_/_/ /_/   /_/  \____/   /_/
+    ______ _       ______          _____       _      _           ______      _ _
+   |  ____| |     |  ____|        |  __ \     (_)    | |         |  ____|    | | |
+   | |__  | |     | |__  __ _  ___| |  | | ___ _  ___| |_ _ __   | |__  __  _| | |
+   |  __| | |     |  __|/ _` |/ __| |  | |/ _ | |/ __| __| '_ \  |  __| \ \/ / | |
+   | |____| |____ | |__| (_| | (__| |__| |  __| | (__| |_| | | | | |____ >  <| | |
+   |______|______||______\__,_|\___|_____/ \___|_|\___|\__|_| |_| |______/_/\_\|_| |
 
-    ______            __  _
-   /_  __/___  ____  / /_(_)___  ____
-    / / / __ \/ __ \/ __/ / __ \/ __ \
-   / / / /_/ / /_/ / /_/ / /_/ / / / /
-  /_/  \____/\____/\__/_/\____/_/ /_/
-
+                           ELF Debian13 All-IN Tools (open-source)
 EOF
 }
 
@@ -670,76 +666,172 @@ EOF
 }
 
 # 主程序
-function main() {
-  msg_info "=== Debian 13 VM 工具 ==="
-
-  # 詢問是否設置密碼
-  echo -e "\n${YW}${BOLD}1. 設置 root 密碼${CL}"
-  read -r -p "是否要設置 root 密碼? (y/N): " SET_PASSWORD
-
-  if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
-    set_root_password
-    configure_ssh
-  else
-    msg_info "跳過密碼設置"
+function install_package_if_needed() {
+  local pkg="$1"
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    apt-get update -qq
+    apt-get install -y "$pkg"
   fi
-
-  # 詢問是否配置固定IP
-  echo -e "\n${YW}${BOLD}2. 配置固定IP地址${CL}"
-  read -r -p "是否要配置固定IP地址? (y/N): " CONFIG_STATIC_IP
-
-  if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
-    configure_static_ip
-  else
-    msg_info "跳過固定IP配置"
-  fi
-
-  # 詢問是否禁用 IPv6 (只有在沒有配置固定IP時才詢問)
-  echo -e "\n${YW}${BOLD}3. 禁用 IPv6${CL}"
-  if [[ "$CONFIG_STATIC_IP" =~ ^[Yy]$ ]]; then
-    msg_info "IPv6 已在配置固定IP時處理"
-  else
-    read -r -p "是否要禁用 IPv6? (y/N): " DISABLE_IPV6_SEPARATE
-    if [[ "$DISABLE_IPV6_SEPARATE" =~ ^[Yy]$ ]]; then
-      disable_ipv6
-    else
-      msg_info "跳過 IPv6 禁用"
-    fi
-  fi
-
-  # 詢問是否優化大文件處理
-  echo -e "\n${YW}${BOLD}4. 優化大文件處理${CL}"
-  read -r -p "是否要優化系統以更好地處理大文件? (y/N): " OPTIMIZE_LARGE_FILES
-
-  if [[ "$OPTIMIZE_LARGE_FILES" =~ ^[Yy]$ ]]; then
-    optimize_for_large_files
-  else
-    msg_info "跳過大文件處理優化"
-  fi
-
-  # 詢問是否擴展硬碟
-  echo -e "\n${YW}${BOLD}5. 擴展硬碟空間${CL}"
-  read -r -p "是否要擴展硬碟空間? (y/N): " EXPAND_DISK
-
-  if [[ "$EXPAND_DISK" =~ ^[Yy]$ ]]; then
-    expand_disk
-  else
-    msg_info "跳過硬碟擴展"
-  fi
-
-  # 詢問是否優化網路傳輸
-  echo -e "\n${YW}${BOLD}6. 優化網路傳輸${CL}"
-  read -r -p "是否要優化網路傳輸參數 (BBR, socket buffer 等)? (y/N): " OPTIMIZE_NETWORK
-
-  if [[ "$OPTIMIZE_NETWORK" =~ ^[Yy]$ ]]; then
-    optimize_network_stack
-  else
-    msg_info "跳過網路傳輸優化"
-  fi
-
-  msg_ok "\n=== 所有操作完成 ==="
-  msg_info "您可以使用 SSH 連接到此虛擬機"
 }
 
-# 執行主程序
-main
+function install_guest_agent() {
+  msg_info "安裝 qemu-guest-agent..."
+  install_package_if_needed qemu-guest-agent
+  systemctl enable --now qemu-guest-agent >/dev/null 2>&1 || true
+  msg_ok "qemu-guest-agent 安裝完成"
+}
+
+function install_docker_stack() {
+  msg_info "安裝 Docker 引擎與 Compose..."
+  install_package_if_needed apt-transport-https
+  install_package_if_needed ca-certificates
+  install_package_if_needed curl
+  install_package_if_needed gnupg
+  install_package_if_needed lsb-release
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+$(lsb_release -cs) stable" >/etc/apt/sources.list.d/docker.list
+  apt-get update -qq
+  apt-get install -y docker-ce docker-ce-cli containerd.io
+  curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
+  systemctl enable --now docker >/dev/null 2>&1 || true
+  msg_ok "Docker 與 Compose 安裝完成"
+}
+
+function cleanup_log_cron() {
+  rm -f /usr/local/sbin/elf-log-cleanup.sh /etc/cron.d/elf-log-cleanup
+}
+
+function schedule_log_cleanup() {
+  local choice
+  choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "LOG MAINTENANCE" --menu "選擇 log 清理排程" 12 60 5 \
+    "monthly" "每月一次" \
+    "quarterly" "每 3 個月一次" \
+    "semiannual" "每 6 個月一次" \
+    "disable" "停用排程" \
+    3>&1 1>&2 2>&3) || return 0
+
+  if [ "$choice" = "disable" ]; then
+    cleanup_log_cron
+    msg_ok "已停用 log 清理排程"
+    return
+  fi
+
+  cat >/usr/local/sbin/elf-log-cleanup.sh <<'EOF'
+#!/bin/bash
+set -e
+log_root="/var/log"
+find "$log_root" -type f -name "*.log" -size +5M -exec truncate -s 0 {} \; || true
+find "$log_root" -type f -name "*.gz" -mtime +30 -delete || true
+journalctl --vacuum-time=30d >/dev/null 2>&1 || true
+EOF
+  chmod +x /usr/local/sbin/elf-log-cleanup.sh
+
+  local cron_expr=""
+  case "$choice" in
+    monthly) cron_expr="0 3 1 * *" ;;
+    quarterly) cron_expr="0 3 1 */3 *" ;;
+    semiannual) cron_expr="0 3 1 */6 *" ;;
+  esac
+
+  cat >/etc/cron.d/elf-log-cleanup <<EOF
+$cron_expr root /usr/local/sbin/elf-log-cleanup.sh
+EOF
+  msg_ok "已設定 $choice 排程"
+}
+
+function account_menu() {
+  while true; do
+    local choice
+    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "帳號 / SSH" --menu "選擇要執行的操作" 15 60 4 \
+      "rootpass" "設定 root 密碼" \
+      "ssh" "安裝並啟用 SSH (允許 root 密碼登入)" \
+      "guest" "安裝 qemu-guest-agent" \
+      "back" "返回主選單" \
+      3>&1 1>&2 2>&3) || break
+    case "$choice" in
+      rootpass) set_root_password ;;
+      ssh) configure_ssh ;;
+      guest) install_guest_agent ;;
+      back) break ;;
+    esac
+  done
+}
+
+function docker_menu() {
+  while true; do
+    local choice
+    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Docker / Compose" --menu "選擇要執行的操作" 12 60 3 \
+      "docker" "安裝 Docker 與 Compose" \
+      "guest" "安裝 qemu-guest-agent" \
+      "back" "返回主選單" \
+      3>&1 1>&2 2>&3) || break
+    case "$choice" in
+      docker) install_docker_stack ;;
+      guest) install_guest_agent ;;
+      back) break ;;
+    esac
+  done
+}
+
+function network_menu() {
+  while true; do
+    local choice
+    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "網路設定" --menu "選擇要執行的操作" 15 60 4 \
+      "static" "配置固定 IP / DNS" \
+      "ipv6" "禁用 IPv6" \
+      "opt" "優化網路傳輸" \
+      "back" "返回主選單" \
+      3>&1 1>&2 2>&3) || break
+    case "$choice" in
+      static) configure_static_ip ;;
+      ipv6) disable_ipv6 ;;
+      opt) optimize_network_stack ;;
+      back) break ;;
+    esac
+  done
+}
+
+function system_menu() {
+  while true; do
+    local choice
+    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "系統 / 磁碟優化" --menu "選擇要執行的操作" 15 60 4 \
+      "large" "優化大文件處理" \
+      "disk" "擴展硬碟 (含 LVM)" \
+      "log" "設定 log 清理排程" \
+      "back" "返回主選單" \
+      3>&1 1>&2 2>&3) || break
+    case "$choice" in
+      large) optimize_for_large_files ;;
+      disk) expand_disk ;;
+      log) schedule_log_cleanup ;;
+      back) break ;;
+    esac
+  done
+}
+
+function main_menu() {
+  while true; do
+    local choice
+    choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "第二階段工具" --menu "選擇要執行的操作" 18 70 6 \
+      "account" "帳號 / SSH / guest agent" \
+      "network" "網路設定與優化" \
+      "system" "磁碟與系統優化 / log 維護" \
+      "docker" "Docker / Compose 安裝" \
+      "quit" "結束" \
+      3>&1 1>&2 2>&3) || exit 0
+    case "$choice" in
+      account) account_menu ;;
+      network) network_menu ;;
+      system) system_menu ;;
+      docker) docker_menu ;;
+      quit) exit 0 ;;
+    esac
+  done
+}
+
+main_menu
+
