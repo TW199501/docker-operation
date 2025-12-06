@@ -28,28 +28,28 @@ check_kubectl() {
 # 部署 Nginx 應用
 deploy_nginx() {
   echo_yellow "正在部署 Nginx 應用..."
-  
+
   # 創建 Nginx Deployment
   kubectl create deployment nginx --image=nginx:alpine
-  
+
   # 暴露服務
   kubectl expose deployment nginx --port=80 --type=NodePort
-  
+
   # 獲取服務信息
   echo_blue "Nginx 應用部署信息："
   kubectl get deployment nginx
   kubectl get service nginx
-  
+
   echo_green "Nginx 應用部署完成"
 }
 
 # 部署 MySQL 數據庫
 deploy_mysql() {
   echo_yellow "正在部署 MySQL 數據庫..."
-  
+
   # 創建 MySQL 密碼 Secret
   kubectl create secret generic mysql-pass --from-literal=password=rootpass123
-  
+
   # 創建 MySQL Deployment 和 Service
   cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -97,19 +97,19 @@ spec:
       - name: mysql-persistent-storage
         emptyDir: {}
 EOF
-  
+
   echo_blue "MySQL 數據庫部署信息："
   kubectl get deployment mysql
   kubectl get service mysql
   kubectl get secret mysql-pass
-  
+
   echo_green "MySQL 數據庫部署完成"
 }
 
 # 部署 WordPress
 deploy_wordpress() {
   echo_yellow "正在部署 WordPress..."
-  
+
   # 創建 WordPress Deployment 和 Service
   cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -160,24 +160,24 @@ spec:
         - containerPort: 80
           name: wordpress
 EOF
-  
+
   echo_blue "WordPress 部署信息："
   kubectl get deployment wordpress
   kubectl get service wordpress
-  
+
   echo_green "WordPress 部署完成"
 }
 
 # 部署監控組件
 deploy_monitoring() {
   echo_yellow "正在部署監控組件..."
-  
+
   # 這裡可以部署 Prometheus、Grafana 等監控組件
   echo_blue "監控組件部署選項："
   echo "1. Prometheus"
   echo "2. Grafana"
   echo "3. 完整監控套件"
-  
+
   echo_yellow "請手動部署監控組件或使用專門的監控腳本"
 }
 
@@ -208,16 +208,16 @@ show_menu() {
 # 主函數
 main() {
   check_kubectl
-  
+
   while true; do
     show_menu
     read -p "請選擇操作 [1-6]: " choice
-    
+
     case $choice in
       1)
         deploy_nginx
         echo ""
-        read -p "按回車鍵繼續..." 
+        read -p "按回車鍵繼續..."
         ;;
       2)
         deploy_mysql

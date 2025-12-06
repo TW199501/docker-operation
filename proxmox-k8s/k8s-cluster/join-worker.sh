@@ -32,38 +32,38 @@ update_system() {
 # 安裝必要組件
 install_prerequisites() {
   echo_yellow "正在安裝必要組件..."
-  
+
   # 安裝必要工具
   apt install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
-  
+
   echo_green "必要組件安裝完成"
 }
 
 # 安裝 Docker
 install_docker() {
   echo_yellow "正在安裝 Docker..."
-  
+
   # 添加 Docker 官方 GPG 密鑰
 curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-  
+
   # 添加 Docker 官方倉庫
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-  
+
   # 安裝 Docker Engine
   apt update
   apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-  
+
   # 啟動並設置 Docker 開機自啟
   systemctl start docker
   systemctl enable docker
-  
+
   echo_green "Docker 安裝完成"
 }
 
 # 配置 Docker daemon
 configure_docker() {
   echo_yellow "正在配置 Docker daemon..."
-  
+
   # 創建 daemon.json 配置文件
 cat > /etc/docker/daemon.json <<EOF
 {
@@ -75,73 +75,73 @@ cat > /etc/docker/daemon.json <<EOF
   "storage-driver": "overlay2"
 }
 EOF
-  
+
   # 重啟 Docker 服務
   systemctl daemon-reload
   systemctl restart docker
-  
+
   echo_green "Docker 配置完成"
 }
 
 # 安裝 Kubernetes 組件
 install_kubernetes() {
   echo_yellow "正在安裝 Kubernetes 組件..."
-  
+
   # 添加 Kubernetes 官方 GPG 密鑰
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-  
+
   # 添加 Kubernetes 官方倉庫
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
-  
+
   # 安裝 Kubernetes 組件
   apt update
   apt install -y kubelet kubeadm kubectl
   apt-mark hold kubelet kubeadm kubectl
-  
+
   echo_green "Kubernetes 組件安裝完成"
 }
 
 # 配置系統參數
 configure_system() {
   echo_yellow "正在配置系統參數..."
-  
+
   # 禁用 swap
   swapoff -a
   sed -i '/ swap / s/^(.*)$/#1/g' /etc/fstab
-  
+
   # 加載必要的內核模塊
 cat <<EOF | tee /etc/modules-load.d/k8s.conf
 br_netfilter
 EOF
-  
+
   modprobe br_netfilter
-  
+
   # 設置網絡參數
 cat <<EOF | tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
 net.ipv4.ip_forward = 1
 EOF
-  
+
   sysctl --system
-  
+
   echo_green "系統參數配置完成"
 }
 
 # 加入 Kubernetes 集群
 join_cluster() {
   echo_yellow "正在加入 Kubernetes 集群..."
-  
+
   # 檢查是否提供了 join 命令
   if [ -z "$1" ]; then
     echo_red "錯誤：請提供從 Master 節點獲取的 join 命令"
     echo_yellow "使用方法：./join-worker.sh \"kubeadm join ...\""
     exit 1
   fi
-  
+
   # 執行 join 命令
   $1
-  
+
   echo_green "Worker 節點已成功加入集群"
 }
 
@@ -151,7 +151,7 @@ main() {
   echo_green "Kubernetes Worker 節點加入腳本"
   echo_green "適用於 Proxmox 8.0-9.0"
   echo_green "==========================================="
-  
+
   check_root
   update_system
   install_prerequisites
@@ -160,7 +160,7 @@ main() {
   install_kubernetes
   configure_system
   join_cluster "$1"
-  
+
   echo_green "==========================================="
   echo_green "Worker 節點配置完成！"
   echo_green "==========================================="

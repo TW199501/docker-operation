@@ -1,9 +1,11 @@
 # Proxmox 8.0-9.0 Kubernetes 專案
 
 ## 專案概述
+
 本專案旨在在 Proxmox VE 8.0-9.0 環境中部署和管理 Kubernetes 集群，提供完整的容器化應用解決方案。專案包含自動化腳本和詳細文檔，幫助用戶快速搭建和管理 Kubernetes 環境。
 
 ## 目錄結構
+
 ```
 proxmox-k8s/
 ├── README.md
@@ -32,6 +34,7 @@ proxmox-k8s/
 ```
 
 ## 功能特性
+
 - **自動化部署**：一鍵部署 Kubernetes 集群
 - **Proxmox LXC 支持**：專為 Proxmox 環境優化
 - **高可用性**：支持多節點集群配置
@@ -41,6 +44,7 @@ proxmox-k8s/
 - **應用部署**：簡化的應用部署工具
 
 ## 系統要求
+
 - **Proxmox VE 版本**：8.0-9.0
 - **節點配置**：
   - Master 節點：4 CPU 核心，8GB RAM，50GB 存儲
@@ -51,6 +55,7 @@ proxmox-k8s/
 ## 快速開始
 
 ### 1. 項目初始化
+
 ```bash
 # 克隆項目
 cd /opt
@@ -62,6 +67,7 @@ make init
 ```
 
 ### 2. Proxmox 環境準備
+
 ```bash
 # 創建 Master 節點 LXC 容器
 pct create 100 \
@@ -85,6 +91,7 @@ pct create 101 \
 ```
 
 ### 3. 部署 Kubernetes 集群
+
 ```bash
 # 在 Master 節點執行
 pct enter 100
@@ -96,6 +103,7 @@ pct enter 101
 ```
 
 ### 4. 驗證集群
+
 ```bash
 # 在 Master 節點執行
 kubectl get nodes
@@ -105,22 +113,28 @@ kubectl get pods -A
 ## 腳本使用
 
 ### Master 節點腳本
+
 - `create-cluster.sh`：初始化 Kubernetes 集群
 - `reset-cluster.sh`：重置集群配置
 
 ### Worker 節點腳本
+
 - `join-worker.sh`：加入現有 Kubernetes 集群
 
 ### 應用部署腳本
+
 - `deploy-app.sh`：部署常見應用（Nginx、MySQL、WordPress）
 
 ## 文檔資源
+
 使用 `make docs` 查看詳細文檔：
+
 1. **架構設計**：`docs/architecture.md`
 2. **部署指南**：`docs/deployment-guide.md`
 3. **故障排除**：`docs/troubleshooting.md`
 
 ## 項目管理
+
 ```bash
 make help     # 顯示幫助信息
 make init     # 初始化項目
@@ -135,9 +149,11 @@ make clean    # 清理臨時文件
 ## Windows 環境支持
 
 ### 安裝 make 工具
+
 Windows 用戶可以通過以下方式安裝 make 工具：
 
 #### 方法 1：安裝 Chocolatey（推薦）
+
 ```powershell
 # 以管理員身份運行 PowerShell
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -147,14 +163,17 @@ choco install make
 ```
 
 #### 方法 2：安裝 Git for Windows
+
 1. 下載並安裝 [Git for Windows](https://git-scm.com/download/win)
 2. 安裝完成後，使用 Git Bash 運行 make 命令
 
 #### 方法 3：安裝 MinGW-w64
+
 1. 下載 [MinGW-w64](https://www.mingw-w64.org/downloads/)
 2. 安裝並將 bin 目錄添加到 PATH 環境變量
 
 #### 方法 4：使用 WSL（Windows Subsystem for Linux）
+
 ```bash
 # 啟用 WSL
 wsl --install
@@ -165,7 +184,9 @@ sudo apt install make
 ```
 
 ### Windows 環境下直接運行腳本
+
 如果不方便安裝 make 工具，可以直接運行腳本：
+
 ```powershell
 # 初始化項目（設置腳本權限）
 chmod +x k8s-cluster/*.sh
@@ -179,10 +200,12 @@ chmod +x k8s-apps/*.sh
 ```
 
 ## 注意事項
+
 1. **資源規劃**：確保 Proxmox 主機有足夠資源
 2. **網絡配置**：節點間需要穩定網絡連接
 3. **安全考慮**：生產環境需要配置適當的安全策略
 4. **備份策略**：定期備份 etcd 和重要數據
 
 ## 貢獻和反饋
+
 歡迎提交 Issue 和 Pull Request 來改進這個專案！
