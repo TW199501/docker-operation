@@ -447,25 +447,25 @@ start_script
 msg_info "Validating Storage"
 while read -r line; do
   TAG=$(echo $line | awk '{print $1}')
-  TYPE=$(echo $line | awk '{printf "%-10s", $2}')
+  TYPE=$(echo $line | awk '{printf "% -10s", $2}')
   FREE=$(echo $line | numfmt --field 4-6 --from-unit=K --to=iec --format %.2f | awk '{printf( "%9sB", $6)}')
   ITEM="  Type: $TYPE Free: $FREE "
   OFFSET=2
   if [[ $((${#ITEM} + $OFFSET)) -gt ${MSG_MAX_LENGTH:-} ]]; then
     MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
   fi
-  STORAGE_MENU+=("$TAG" "$ITEM" "OFF")
+  STORAGE_MENU+=("$TAG" "$ITEM")
 done < <(pvesm status -content images | awk 'NR>1')
 VALID=$(pvesm status -content images | awk 'NR>1')
 if [ -z "$VALID" ]; then
   msg_error "Unable to detect a valid storage location."
   exit
-elif [ $((${#STORAGE_MENU[@]} / 3)) -eq 1 ]; then
+elif [ $((${#STORAGE_MENU[@]} / 2)) -eq 1 ]; then
   STORAGE=${STORAGE_MENU[0]}
 else
   while [ -z "${STORAGE:+x}" ]; do
-    STORAGE=$(whiptail --backtitle "ELF Debian13 Install " --title "Storage Pools" --radiolist \
-      "Which storage pool would you like to use for ${HN}?\nTo make a selection, use the Spacebar.\n" \
+    STORAGE=$(whiptail --backtitle "ELF Debian13 Install " --title "Storage Pools" --menu \
+      "Which storage pool would you like to use for ${HN}?" \
       16 $(($MSG_MAX_LENGTH + 23)) 6 \
       "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)
   done
