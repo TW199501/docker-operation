@@ -605,32 +605,103 @@ fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
-URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
+# 檢查本地是否已有映像檔
+LOCAL_IMAGE_DIR="/var/lib/vz/template/iso"
+LOCAL_IMAGE="$LOCAL_IMAGE_DIR/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
+
+if [ -f "$LOCAL_IMAGE" ] && [ -s "$LOCAL_IMAGE" ]; then
+  msg_info "找到本地 Debian 13 映像檔"
+  URL="$LOCAL_IMAGE"
+  USE_LOCAL_IMAGE=true
+else
+  msg_info "未找到本地映像檔，將從網路下載"
+  URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-$(dpkg --print-architecture).qcow2"
+  USE_LOCAL_IMAGE=false
+fi
+
 sleep 2
-msg_ok "${CL}${BL}${URL}${CL}"
+msg_ok "${CL}${BL}$URL${CL}"
 
-# Download the image with error handling
-FILE=$(basename "$URL")
-msg_info "Downloading to: $(pwd)/$FILE"
+# 處理映像檔
+if [ "$USE_LOCAL_IMAGE" = true ]; then
+  # 使用本地映像檔
+  FILE=$(basename "$URL")
+  cp "$URL" "$(pwd)/$FILE"
+  msg_ok "使用本地映像檔: $FILE"
+else
+  # 下載映像檔
+  FILE=$(basename "$URL")
+  msg_info "Downloading to: $(pwd)/$FILE"
 
-if curl -f#SL -o "$FILE" "$URL"; then
-  echo -en "\e[1A\e[0K"
+# 添加重試機制，最多嘗試3次
+MAX_RETRIES=3
+RETRY_COUNT=0
+DOWNLOAD_SUCCESS=false
 
-  # Verify the downloaded file
-  if [ -f "$FILE" ] && [ -s "$FILE" ]; then
-    FILE_SIZE=$(du -h "$FILE" | cut -f1)
-    msg_ok "Downloaded ${CL}${BL}${FILE}${CL} (${FILE_SIZE})"
+while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$DOWNLOAD_SUCCESS" = "false" ]; do
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+
+  if [ $RETRY_COUNT -gt 1 ]; then
+    msg_info "重試下載 (嘗試 $RETRY_COUNT/$MAX_RETRIES)..."
+    sleep 3
+  fi
+
+  # 嘗試使用不同的下載方式
+  if [ $RETRY_COUNT -eq 1 ]; then
+    # 第一次嘗試：使用 curl
+    if curl -f#SL --connect-timeout 30 -o "$FILE" "$URL"; then
+      DOWNLOAD_SUCCESS=true
+    fi
+  elif [ $RETRY_COUNT -eq 2 ]; then
+    # 第二次嘗試：使用 wget
+    if command -v wget >/dev/null 2>&1; then
+      if wget --timeout=30 --tries=3 -O "$FILE" "$URL"; then
+        DOWNLOAD_SUCCESS=true
+      fi
+    else
+      # 如果沒有 wget，使用 curl 但換不同參數
+      if curl -f#SL --connect-timeout 60 --retry 3 --retry-delay 5 -o "$FILE" "$URL"; then
+        DOWNLOAD_SUCCESS=true
+      fi
+    fi
   else
-    msg_error "Download completed but file is missing or empty"
-    msg_error "Expected file: $(pwd)/$FILE"
-    ls -lh "$(pwd)" 2>/dev/null || true
+    # 第三次嘗試：使用 curl 但增加超時時間
+    if curl -f#SL --connect-timeout 120 --retry 5 --retry-delay 10 -o "$FILE" "$URL"; then
+      DOWNLOAD_SUCCESS=true
+    fi
+  fi
+done
+
+  if [ "$DOWNLOAD_SUCCESS" = "true" ]; then
+    echo -en "\e[1A\e[0K"
+
+    # Verify the downloaded file
+    if [ -f "$FILE" ] && [ -s "$FILE" ]; then
+      FILE_SIZE=$(du -h "$FILE" | cut -f1)
+      msg_ok "Downloaded ${CL}${BL}${FILE}${CL} (${FILE_SIZE})"
+
+      # 保存下載的映像檔以供將來使用
+      if [ ! -d "$LOCAL_IMAGE_DIR" ]; then
+        mkdir -p "$LOCAL_IMAGE_DIR"
+      fi
+
+      if [ ! -f "$LOCAL_IMAGE" ]; then
+        msg_info "保存映像檔到本地目錄供將來使用"
+        cp "$(pwd)/$FILE" "$LOCAL_IMAGE"
+        msg_ok "映像檔已保存到: $LOCAL_IMAGE"
+      fi
+    else
+      msg_error "Download completed but file is missing or empty"
+      msg_error "Expected file: $(pwd)/$FILE"
+      ls -lh "$(pwd)" 2>/dev/null || true
+      exit 1
+    fi
+  else
+    msg_error "Failed to download Debian 13 image"
+    msg_error "URL: ${URL}"
+    msg_error "Please check your internet connection and try again"
     exit 1
   fi
-else
-  msg_error "Failed to download Debian 13 image"
-  msg_error "URL: ${URL}"
-  msg_error "Please check your internet connection and try again"
-  exit 1
 fi
 
 STORAGE_TYPE=$(pvesm status -storage "$STORAGE" | awk 'NR>1 {print $2}')
@@ -698,14 +769,27 @@ for i in {0,1}; do
   fi
 done
 
+# 確保 PVE 主機上安裝了必要的工具
 if ! command -v virt-customize &>/dev/null; then
   msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
   apt-get -qq update >/dev/null
-  apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
+  apt-get -qq install libguestfs-tools lsb-release qemu-guest-agent -y >/dev/null
   # Workaround for Proxmox VE 9.0 libguestfs issue
   apt-get -qq install dhcpcd-base -y >/dev/null 2>&1 || true
-  msg_ok "Installed libguestfs-tools successfully"
+  msg_ok "Installed libguestfs-tools and qemu-guest-agent successfully"
+else
+  # 確保 qemu-guest-agent 已安裝
+  if ! dpkg -l | grep -q qemu-guest-agent; then
+    msg_info "Installing QEMU Guest Agent on host"
+    apt-get -qq update >/dev/null
+    apt-get -qq install qemu-guest-agent -y >/dev/null
+    msg_ok "Installed qemu-guest-agent successfully"
+  fi
 fi
+
+# 確保 qemu-guest-agent 服務已啟用並運行
+systemctl enable qemu-guest-agent >/dev/null 2>&1 || true
+systemctl restart qemu-guest-agent >/dev/null 2>&1 || true
 
 # Fix network issues for virt-customize
 msg_info "Setting up network for virt-customize..."
@@ -714,11 +798,32 @@ export https_proxy="${https_proxy:-}"
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-  if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
-     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
-     virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
-     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
-     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null; then
+
+  # 設置更長的超時時間和重試機制
+  export LIBGUESTFS_BACKEND_SETTINGS=timeout=600
+
+  # 先安裝基本套件
+  if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null; then
+    # 嘗試添加 Docker 存儲庫和安裝 Docker
+    DOCKER_INSTALL_SUCCESS=false
+
+    # 嘗試最多3次
+    for i in {1..3}; do
+      if [ $i -gt 1 ]; then
+        msg_info "重試安裝 Docker (嘗試 $i/3)..."
+        sleep 3
+      fi
+
+      if virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL --connect-timeout 30 --retry 3 https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
+         virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
+         virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
+         virt-customize -q -a "${FILE}" --run-command "curl -L --connect-timeout 30 --retry 3 \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null; then
+        DOCKER_INSTALL_SUCCESS=true
+        break
+      fi
+    done
+
+    if [ "$DOCKER_INSTALL_SUCCESS" = "true" ]; then
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
