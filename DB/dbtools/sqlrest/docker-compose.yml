@@ -1,0 +1,95 @@
+version: '3.3'
+services:
+  mysqldb:
+    container_name: sqlrest_mysqldb
+    image: registry.cn-hangzhou.aliyuncs.com/inrgihc/mysql:5.7
+    network_mode: host
+    volumes:
+      - "/data/mysql:/var/lib/mysql"
+    environment:
+      MYSQL_DATABASE: sqlrest
+      MYSQL_USER: tangyibo
+      MYSQL_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_HOST: '%'
+    healthcheck:
+      test: ["CMD", "mysql", "-uroot", "-p123456" ,"-e"," select 1 "]
+      interval: 10s
+      timeout: 3s
+      retries: 60
+      start_period: 30s
+  manager:
+    container_name: sqlrest_manager
+    image: registry.cn-hangzhou.aliyuncs.com/inrgihc/sqlrest-manager:latest
+    network_mode: host
+    environment:
+      DB_TYPE: mysql
+      MYSQLDB_HOST: localhost
+      MYSQLDB_PORT: 3306
+      MYSQLDB_USERNAME: tangyibo
+      MYSQLDB_PASSWORD: 123456
+      MYSQLDB_NAME: sqlrest
+      MANAGER_HOST: localhost
+      MANAGER_PORT: 8090
+      EXECUTOR_PORT: 8092
+      GATEWAY_PORT: 8091
+      SQLREST_DS_ENCRYPT: false
+#      SQLREST_MANAGER_URL: http://localhost:8090
+#      SQLREST_GATEWAY_URL: http://localhost:8091
+    volumes:
+      - /tmp:/tmp
+    ports:
+      - 8090:8090
+    depends_on:
+      mysqldb:
+        condition: service_healthy
+  executor:
+    container_name: sqlrest_executor
+    image: registry.cn-hangzhou.aliyuncs.com/inrgihc/sqlrest-executor:latest
+    network_mode: host
+    environment:
+      DB_TYPE: mysql
+      MYSQLDB_HOST: localhost
+      MYSQLDB_PORT: 3306
+      MYSQLDB_USERNAME: tangyibo
+      MYSQLDB_PASSWORD: 123456
+      MYSQLDB_NAME: sqlrest
+      MANAGER_HOST: localhost
+      MANAGER_PORT: 8090
+      EXECUTOR_PORT: 8092
+      GATEWAY_PORT: 8091
+      SQLREST_DS_ENCRYPT: false
+    #      SQLREST_MANAGER_URL: http://localhost:8090
+    #      SQLREST_GATEWAY_URL: http://localhost:8091
+    volumes:
+      - /tmp:/tmp
+    ports:
+      - 8092:8092
+    depends_on:
+      mysqldb:
+        condition: service_healthy
+  gateway:
+    container_name: sqlrest_gateway
+    image: registry.cn-hangzhou.aliyuncs.com/inrgihc/sqlrest-gateway:latest
+    network_mode: host
+    environment:
+      DB_TYPE: mysql
+      MYSQLDB_HOST: localhost
+      MYSQLDB_PORT: 3306
+      MYSQLDB_USERNAME: tangyibo
+      MYSQLDB_PASSWORD: 123456
+      MYSQLDB_NAME: sqlrest
+      MANAGER_HOST: localhost
+      MANAGER_PORT: 8090
+      EXECUTOR_PORT: 8092
+      GATEWAY_PORT: 8091
+      SQLREST_DS_ENCRYPT: false
+#      SQLREST_MANAGER_URL: http://localhost:8090
+#      SQLREST_GATEWAY_URL: http://localhost:8091
+    volumes:
+      - /tmp:/tmp
+    ports:
+      - 8091:8091
+    depends_on:
+      mysqldb:
+        condition: service_healthy

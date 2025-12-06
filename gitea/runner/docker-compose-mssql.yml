@@ -1,0 +1,31 @@
+services:
+  gitea:
+    container_name: gitea
+    image: docker.gitea.com/gitea:1.24.5-rootless
+    restart: unless-stopped
+    ports:
+      - "12350:3000"   # Web
+      - "2225:2222"     # SSH Git
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - TZ=Asia/Taipei
+      # --- Database (MSSQL) ---
+      #- GITEA__database__DB_TYPE=${DB_TYPE}
+      #- GITEA__database__HOST=${DB_HOST}:${DB_PORT}
+      #- GITEA__database__NAME=${DB_NAME}
+      #- GITEA__database__USER=${DB_USER}
+      #- GITEA__database__PASSWD=${DB_PASSWD}
+      # --- Server / URLs ---
+      - LOCAL_ROOT_URL=${LOCAL_ROOT_URL}
+      - DOMAIN=${DOMAIN}
+      - SSH_DOMAIN=${SSH_DOMAIN}
+      - LFS_START_SERVER=true
+      - PROXY_FROM_X_FORWARDED_HEADERS=true
+      - INSTALL_LOCK=false
+
+    volumes:
+      - /vol3/1000/hdd/docker3/gitea/data:/var/lib/gitea
+      - /vol3/1000/hdd/docker3/gitea/config:/etc/gitea
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro

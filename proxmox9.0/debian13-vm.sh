@@ -714,12 +714,11 @@ export https_proxy="${https_proxy:-}"
 
 if [ "$INSTALL_DOCKER" == "yes" ]; then
   msg_info "Adding Docker engine and Compose to Debian 13 Qcow2 Disk Image"
-  virt-customize -q -a "${FILE}" --run-command "sed -i 's|deb.debian.org|ftp.tw.debian.org|g' /etc/apt/mirrors/debian.list /etc/apt/mirrors/debian-security.list" >/dev/null &&
-  virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null &&
+  if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server,apt-transport-https,ca-certificates,curl,gnupg,lsb-release >/dev/null &&
+     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
+     virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
+     virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
+     virt-customize -q -a "${FILE}" --run-command "curl -L \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null; then
     virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
@@ -738,11 +737,33 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
     virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
     virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-  msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+    msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+  else
+    msg_error "Failed to install Docker due to network issues. Continuing with basic setup..."
+    # Fallback to basic setup without Docker
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/network/interfaces.d/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/systemd/network/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/netplan/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+    msg_ok "VM image customized (without Docker)"
+  fi
 else
   msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
   # Try to install qemu-guest-agent and cloud-init with retry logic for network issues
-  virt-customize -q -a "${FILE}" --run-command "sed -i 's|deb.debian.org|ftp.tw.debian.org|g' /etc/apt/mirrors/debian.list /etc/apt/mirrors/debian-security.list" >/dev/null &&
+  # Mirror is already deb.debian.org in the image, no need to change
   if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
@@ -777,9 +798,12 @@ if [ "$INSTALL_NODE_EXPORTER" == "yes" ]; then
 
   # Download and install Node Exporter
   virt-customize -q -a "${FILE}" --run-command "useradd --no-create-home --shell /bin/false node_exporter" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "curl -fsSL https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -o /tmp/node_exporter.tar.gz" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "tar -xzf /tmp/node_exporter.tar.gz -C /tmp && mv /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/ && rm -rf /tmp/node_exporter*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "chown node_exporter:node_exporter /usr/local/bin/node_exporter" >/dev/null
+    if virt-customize -q -a "${FILE}" --run-command "curl -fsSL https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz -o /tmp/node_exporter.tar.gz" >/dev/null; then
+      virt-customize -q -a "${FILE}" --run-command "tar -xzf /tmp/node_exporter.tar.gz -C /tmp && mv /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/ && rm -rf /tmp/node_exporter*" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "chown node_exporter:node_exporter /usr/local/bin/node_exporter" >/dev/null
+    else
+      msg_error "Failed to download Node Exporter from GitHub. Skipping installation."
+    fi
 
   # Create systemd service file
   virt-customize -q -a "${FILE}" --run-command "cat > /etc/systemd/system/node_exporter.service << 'EOF'
