@@ -661,44 +661,44 @@ else
   FILE=$(basename "$URL")
   msg_info "Downloading to: $(pwd)/$FILE"
 
-# 添加重試機制，最多嘗試3次
-MAX_RETRIES=3
-RETRY_COUNT=0
-DOWNLOAD_SUCCESS=false
+  # 添加重試機制，最多嘗試3次
+  MAX_RETRIES=3
+  RETRY_COUNT=0
+  DOWNLOAD_SUCCESS=false
 
-while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$DOWNLOAD_SUCCESS" = "false" ]; do
-  RETRY_COUNT=$((RETRY_COUNT + 1))
+  while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$DOWNLOAD_SUCCESS" = "false" ]; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
 
-  if [ $RETRY_COUNT -gt 1 ]; then
-    msg_info "重試下載 (嘗試 $RETRY_COUNT/$MAX_RETRIES)..."
-    sleep 3
-  fi
-
-  # 嘗試使用不同的下載方式
-  if [ $RETRY_COUNT -eq 1 ]; then
-    # 第一次嘗試：使用 curl
-    if curl -f#SL --connect-timeout 30 -o "$FILE" "$URL"; then
-      DOWNLOAD_SUCCESS=true
+    if [ $RETRY_COUNT -gt 1 ]; then
+      msg_info "重試下載 (嘗試 $RETRY_COUNT/$MAX_RETRIES)..."
+      sleep 3
     fi
-  elif [ $RETRY_COUNT -eq 2 ]; then
-    # 第二次嘗試：使用 wget
-    if command -v wget >/dev/null 2>&1; then
-      if wget --timeout=30 --tries=3 -O "$FILE" "$URL"; then
+
+    # 嘗試使用不同的下載方式
+    if [ $RETRY_COUNT -eq 1 ]; then
+      # 第一次嘗試：使用 curl
+      if curl -f#SL --connect-timeout 30 -o "$FILE" "$URL"; then
         DOWNLOAD_SUCCESS=true
+      fi
+    elif [ $RETRY_COUNT -eq 2 ]; then
+      # 第二次嘗試：使用 wget
+      if command -v wget >/dev/null 2>&1; then
+        if wget --timeout=30 --tries=3 -O "$FILE" "$URL"; then
+          DOWNLOAD_SUCCESS=true
+        fi
+      else
+        # 如果沒有 wget，使用 curl 但換不同參數
+        if curl -f#SL --connect-timeout 60 --retry 3 --retry-delay 5 -o "$FILE" "$URL"; then
+          DOWNLOAD_SUCCESS=true
+        fi
       fi
     else
-      # 如果沒有 wget，使用 curl 但換不同參數
-      if curl -f#SL --connect-timeout 60 --retry 3 --retry-delay 5 -o "$FILE" "$URL"; then
+      # 第三次嘗試：使用 curl 但增加超時時間
+      if curl -f#SL --connect-timeout 120 --retry 5 --retry-delay 10 -o "$FILE" "$URL"; then
         DOWNLOAD_SUCCESS=true
       fi
     fi
-  else
-    # 第三次嘗試：使用 curl 但增加超時時間
-    if curl -f#SL --connect-timeout 120 --retry 5 --retry-delay 10 -o "$FILE" "$URL"; then
-      DOWNLOAD_SUCCESS=true
-    fi
-  fi
-done
+  done
 
   if [ "$DOWNLOAD_SUCCESS" = "true" ]; then
     echo -en "\e[1A\e[0K"
@@ -845,53 +845,57 @@ if [ "$INSTALL_DOCKER" == "yes" ]; then
       if virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL --connect-timeout 30 --retry 3 https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
          virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
          virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get purge -y docker-compose-plugin --allow-change-held-packages && apt-get install -y docker-ce docker-ce-cli containerd.io" >/dev/null &&
-         virt-customize -q -a "${FILE}" --run-command "curl -L --connect-timeout 30 --retry 3 \"https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null; then
+         virt-customize -q -a "${FILE}" --run-command "curl -L --connect-timeout 30 --retry 3 https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-\$(uname -s)-\$(uname -m) -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose" >/dev/null; then
         DOCKER_INSTALL_SUCCESS=true
         break
       fi
     done
 
     if [ "$DOCKER_INSTALL_SUCCESS" = "true" ]; then
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/network/interfaces.d/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/systemd/network/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/netplan/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-    msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+      virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\\nUseDNS no\\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/network/interfaces.d/*" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/systemd/network/*" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/netplan/*" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
+      virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+      msg_ok "Added Docker engine and Compose to Debian 13 Qcow2 Disk Image successfully"
+    else
+      msg_error "Failed to install Docker due to network issues. Continuing with basic setup..."
+      # Fallback to basic setup without Docker
+      virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\\nUseDNS no\\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
+      # 不刪除網路配置，只確保 cloud-init 能夠正確配置網路
+      virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
+      virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
+      virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+      msg_ok "VM image customized (without Docker)"
+    fi
   else
-    msg_error "Failed to install Docker due to network issues. Continuing with basic setup..."
-    # Fallback to basic setup without Docker
-    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -f /etc/network/interfaces" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/network/interfaces.d/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/systemd/network/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /etc/netplan/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/cloud/cloud.cfg.d" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'datasource_list: [ NoCloud, ConfigDrive ]' > /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'system_info: {network: {renderers: [networkd]}}' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo 'ssh_pwauth: true' >> /etc/cloud/cloud.cfg.d/99_pve.cfg" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "cloud-init clean" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "rm -rf /var/lib/cloud/*" >/dev/null &&
-    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-    msg_ok "VM image customized (without Docker)"
+    msg_error "Failed to install packages due to network issues. Continuing..."
+    # Skip installation but continue with other customizations
+    virt-customize -q -a "${FILE}" --hostname "${HN}" >/dev/null 2>&1 &&
+    virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null 2>&1
+    msg_ok "VM image customized (without additional packages)"
   fi
 else
   msg_info "Adding QEMU Guest Agent and Cloud-Init to Debian 13 Qcow2 Disk Image"
@@ -899,7 +903,7 @@ else
   # Mirror is already deb.debian.org in the image, no need to change
   if virt-customize -q -a "${FILE}" --install qemu-guest-agent,cloud-init,openssh-server >/dev/null 2>&1; then
     virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/ssh/sshd_config.d" >/dev/null &&
-    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\nUseDNS no\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
+    virt-customize -q -a "${FILE}" --run-command "printf 'PasswordAuthentication yes\\nUseDNS no\\n' > /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "chmod 644 /etc/ssh/sshd_config.d/99-custom.conf" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-networkd" >/dev/null &&
     virt-customize -q -a "${FILE}" --run-command "systemctl enable systemd-resolved" >/dev/null &&
@@ -1031,8 +1035,7 @@ if [ "${CI_PASSWORD:-debian}" == "debian" ]; then
   msg_info "⚠️  Using default password 'debian' - Please change after first login!"
 fi
 
-DESCRIPTION=$(
-  cat <<EOF
+DESCRIPTION=$(cat <<EOF
 <div align='center'>
 
 </div>
