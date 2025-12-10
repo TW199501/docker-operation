@@ -5,6 +5,27 @@
 
 set -e
 
+#####################################################################
+# 基本檢查
+#####################################################################
+
+check_requirements() {
+    if ! command -v pvesh >/dev/null 2>&1; then
+        echo "❌ 找不到 pvesh，這腳本需要在 PVE 節點上執行。"
+        exit 1
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "❌ 找不到 jq，請先安裝："
+        echo "    apt update && apt install jq -y"
+        exit 1
+    fi
+}
+
+#####################################################################
+# VM 列表與選擇
+#####################################################################
+
 # 取得所有 VM 清單 (整個 cluster)
 get_vm_list() {
     pvesh get /cluster/resources --type vm --output-format json \
@@ -23,36 +44,47 @@ select_vm() {
     NODE=$(pvesh get /cluster/resources --type vm --output-format json \
            | jq -r ".[] | select(.vmid == ${VMID}) | .node")
 
-    if [ -z "$NODE" ]; then
-        echo "找不到 VMID=${VMID}，請確認後重試。"
+    if [ -z "$NODE" ] || [ "$NODE" = "null" ]; then
+        echo "❌ 找不到 VMID=${VMID}，請確認後重試。"
         exit 1
     fi
 
-    echo "將操作 VM ${VMID} (節點: ${NODE})"
+    echo "✅ 將操作 VM ${VMID} (節點: ${NODE})"
 }
+
+#####################################################################
+# VM 防火牆啟用 / 停用 & 規則管理
+#####################################################################
 
 # 啟用 VM 防火牆
 enable_vm_fw() {
-    echo "啟用 VM ${VMID} 的防火牆..."
+    echo "👉 啟用 VM ${VMID} 的防火牆..."
     pvesh set /nodes/${NODE}/qemu/${VMID}/firewall/options -enable 1
 }
 
 # 關閉 VM 防火牆
 disable_vm_fw() {
-    echo "關閉 VM ${VMID} 的防火牆..."
+    echo "👉 關閉 VM ${VMID} 的防火牆..."
     pvesh set /nodes/${NODE}/qemu/${VMID}/firewall/options -enable 0
 }
 
 # 清空 VM 規則
 clear_vm_rules() {
-    echo "清空 VM ${VMID} 既有的防火牆規則..."
-    pvesh get /nodes/${NODE}/qemu/${VMID}/firewall/rules --output-format json \
-      | jq -r '.[].pos' | sort -nr | while read POS; do
-            [ -n "$POS" ] && pvesh delete /nodes/${NODE}/qemu/${VMID}/firewall/rules/${POS} || true
-        done
+    echo "👉 清空 VM ${VMID} 既有的防火牆規則..."
+    local rules
+    rules=$(pvesh get /nodes/${NODE}/qemu/${VMID}/firewall/rules --output-format json)
+
+    echo "$rules" | jq -r '.[].pos' 2>/dev/null | sort -nr | while read -r POS; do
+        [ -n "$POS" ] && pvesh delete /nodes/${NODE}/qemu/${VMID}/firewall/rules/${POS} || true
+    done
+    echo "✔ 規則已清空。"
 }
 
-# 🔍 檢查並修正 VM 網卡是否啟用 firewall=1
+#####################################################################
+# NIC firewall=1 檢查 / 修正
+#####################################################################
+
+# 檢查並修正 VM 網卡是否啟用 firewall=1
 check_and_fix_vm_nic_firewall() {
     echo
     echo "=== 檢查 VM ${VMID} 的網卡 firewall 設定 ==="
@@ -69,7 +101,7 @@ check_and_fix_vm_nic_firewall() {
     )
 
     if [ "${#nics[@]}" -eq 0 ]; then
-        echo "此 VM 沒有找到任何 net* 介面（可能尚未設定網卡），略過檢查。"
+        echo "⚠ 此 VM 沒有找到任何 net* 介面（可能尚未設定網卡），略過檢查。"
         return 0
     fi
 
@@ -82,15 +114,15 @@ check_and_fix_vm_nic_firewall() {
         val=${line#*=}
 
         if [[ "$val" == *"firewall=1"* ]]; then
-            echo " - ${key}: 已啟用 firewall=1"
+            echo " - ${key}: ✅ 已啟用 firewall=1"
         else
-            echo " - ${key}: 尚未啟用 firewall"
+            echo " - ${key}: ⚠ 尚未啟用 firewall"
             missing+=("$key")
         fi
     done
 
     if [ "${#missing[@]}" -eq 0 ]; then
-        echo "✅ 所有網卡都已啟用 firewall=1，無需變更。"
+        echo "✔ 所有網卡都已啟用 firewall=1，無需變更。"
         return 0
     fi
 
@@ -121,13 +153,41 @@ check_and_fix_vm_nic_firewall() {
     esac
 }
 
+#####################################################################
+# Input Policy 檢查 / 修正
+#####################################################################
+
+# 檢查 VM Input Policy，並強制將 VM 層級改成 ACCEPT（避免被鎖死）
+check_and_fix_vm_input_policy() {
+    echo
+    echo "=== 檢查/修正 VM ${VMID} 的 Input Policy ==="
+
+    local options
+    options=$(pvesh get /nodes/${NODE}/qemu/${VMID}/firewall/options --output-format json)
+
+    # 這裡只是看 VM 這一層有沒有設定 policy_in（可能為 null / 未設定）
+    local raw
+    raw=$(echo "$options" | jq -r '.policy_in // "<未在 VM 上設定，可能沿用上層>"')
+
+    echo "目前 VM 層級的 policy_in = ${raw}"
+    echo "為避免被防火牆鎖死，將 VM 的 Input Policy 強制設為 ACCEPT（只影響這台 VM，不動資料中心/節點）..."
+
+    pvesh set /nodes/${NODE}/qemu/${VMID}/firewall/options -policy_in ACCEPT
+
+    echo "✅ 已將 VM ${VMID} 的 Input Policy 設為 ACCEPT"
+}
+
+#####################################################################
+# Profiles
+#####################################################################
+
 # Web Server Profile
 apply_profile_web() {
     echo "套用 Web Server Profile 到 VM ${VMID} ..."
     enable_vm_fw
     clear_vm_rules
 
-    # 允許 SSH 從內網
+    # 允許 SSH 從內網 (192.168.0.0/16 可依你環境調整)
     pvesh create /nodes/${NODE}/qemu/${VMID}/firewall/rules \
       -type in -action ACCEPT -enable 1 -macro SSH -source 192.168.0.0/16
 
@@ -141,7 +201,7 @@ apply_profile_web() {
     pvesh create /nodes/${NODE}/qemu/${VMID}/firewall/rules \
       -type in -action DROP -enable 1
 
-    echo "Web Profile 套用完成。"
+    echo "✅ Web Profile 套用完成。"
 }
 
 # IP 白名單 Profile
@@ -157,16 +217,20 @@ apply_profile_ip_whitelist() {
     pvesh create /nodes/${NODE}/qemu/${VMID}/firewall/rules \
       -type in -action DROP -enable 1
 
-    echo "IP 白名單 Profile 套用完成。"
+    echo "✅ IP 白名單 Profile 套用完成。"
 }
+
+#####################################################################
+# 自訂規則（有選單）
+#####################################################################
 
 # 自訂一條規則（方向 / 動作用選單）
 add_custom_rule() {
     echo "自訂規則："
 
     echo "方向："
-    echo "  1) in  (預設，封/放進來的流量)"
-    echo "  2) out (出去的流量)"
+    echo "  1) in  (預設，進來 VM 的流量)"
+    echo "  2) out (VM 出去的流量)"
     read -p "請選擇方向 (1-2，預設 1): " DIR_CH
     case "$DIR_CH" in
         2) DIR="out" ;;
@@ -176,7 +240,7 @@ add_custom_rule() {
     echo "動作："
     echo "  1) ACCEPT (允許)"
     echo "  2) DROP   (直接丟棄，不回應)"
-    echo "  3) REJECT (拒絕，回應對方)"
+    echo "  3) REJECT (拒絕並回應對方)"
     read -p "請選擇動作 (1-3，預設 1): " ACT_CH
     case "$ACT_CH" in
         2) ACT="DROP" ;;
@@ -184,7 +248,7 @@ add_custom_rule() {
         *) ACT="ACCEPT" ;;
     esac
 
-    read -p "通訊協定 (tcp/udp/icmp，可空白): " PROTO
+    read -p "通訊協定 (tcp/udp/icmp，可空白代表 ALL): " PROTO
     read -p "目的 Port (如 22 或 80:443，可空白): " PORT
     read -p "來源 IP (例: 192.168.25.0/24，可空白): " SRC
 
@@ -199,12 +263,20 @@ add_custom_rule() {
     pvesh create /nodes/${NODE}/qemu/${VMID}/firewall/rules ${ARGS}
 }
 
-# 顯示現有規則
+#####################################################################
+# 顯示規則
+#####################################################################
+
 show_rules() {
+    echo
     echo "VM ${VMID} 目前規則："
     pvesh get /nodes/${NODE}/qemu/${VMID}/firewall/rules --output-format json \
       | jq -r '.[] | "\(.pos)\t\(.type)\t\(.action)\t\(.proto // "-")\tport=\(.dport // "-")\tsrc=\(.source // "-")"'
 }
+
+#####################################################################
+# 主選單
+#####################################################################
 
 main_menu() {
     while true; do
@@ -230,13 +302,17 @@ main_menu() {
             6) show_rules ;;
             7) clear_vm_rules ;;
             0) exit 0 ;;
-            *) echo "選項錯誤，請重試。" ;;
+            *) echo "❌ 選項錯誤，請重試。" ;;
         esac
     done
 }
 
-### 主流程 ###
+#####################################################################
+# 主流程
+#####################################################################
 
+check_requirements
 select_vm
 check_and_fix_vm_nic_firewall
+check_and_fix_vm_input_policy
 main_menu
