@@ -515,11 +515,43 @@ function start_script() {
   fi
 }
 
+function configure_cloudinit_network() {
+  local ci_ip ci_prefix ci_gw ci_dns
+
+  if ci_ip=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "VM IP" --inputbox "Set VM IPv4 address (e.g. 192.168.1.50)" 8 58 3>&1 1>&2 2>&3); then
+    ci_ip=$(echo "$ci_ip" | tr -d ' ')
+  else
+    exit-script
+  fi
+
+  if ci_prefix=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "NETMASK PREFIX" --inputbox "Set prefix length (e.g. 24 for 255.255.255.0)" 8 58 24 3>&1 1>&2 2>&3); then
+    ci_prefix=$(echo "$ci_prefix" | tr -d ' ')
+  else
+    exit-script
+  fi
+
+  if ci_gw=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "GATEWAY" --inputbox "Set default gateway (e.g. 192.168.1.254)" 8 58 3>&1 1>&2 2>&3); then
+    ci_gw=$(echo "$ci_gw" | tr -d ' ')
+  else
+    exit-script
+  fi
+
+  if ci_dns=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "DNS" --inputbox "Set DNS server (e.g. 8.8.8.8)" 8 58 8.8.8.8 3>&1 1>&2 2>&3); then
+    ci_dns=$(echo "$ci_dns" | tr -d ' ')
+  else
+    exit-script
+  fi
+
+  CI_IPCFG="ip=${ci_ip}/${ci_prefix},gw=${ci_gw}"
+  CI_DNS="$ci_dns"
+}
+
 check_root
 arch_check
 pve_check
 ssh_check
 start_script
+configure_cloudinit_network
 
 msg_info "Validating Storage"
 while read -r line; do
@@ -624,6 +656,13 @@ qm set $VMID \
   -scsi1 ${STORAGE}:cloudinit \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
+
+if [ -n "${CI_IPCFG:-}" ]; then
+  qm set $VMID --ipconfig0 "$CI_IPCFG" >/dev/null
+fi
+if [ -n "${CI_DNS:-}" ]; then
+  qm set $VMID --nameserver "$CI_DNS" >/dev/null
+fi
 
 
 qm set "$VMID" -description "$DESCRIPTION" >/dev/null

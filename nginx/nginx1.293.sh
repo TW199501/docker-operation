@@ -169,8 +169,16 @@ module_C_source_and_deps() {
   wget -q "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
   tar -xzf "nginx-${NGINX_VERSION}.tar.gz"
 
-  # ===== 模組原始碼 =====
+  # ===== 模組原始碼（可重複執行：先清理目標目錄再 clone） =====
   echo ">> 取得外掛模組"
+
+  rm -rf "$BUILD_DIR/ngx_http_geoip2_module" \
+         "$BUILD_DIR/ngx_brotli" \
+         "$BUILD_DIR/headers-more-nginx-module" \
+         "$BUILD_DIR/ngx_cache_purge" \
+         "$BUILD_DIR/njs" \
+         "$BUILD_DIR/goaccess"
+
   git clone --depth=1 https://github.com/leev/ngx_http_geoip2_module.git "$BUILD_DIR/ngx_http_geoip2_module"
   git clone --recursive https://github.com/google/ngx_brotli.git "$BUILD_DIR/ngx_brotli"
   git clone --depth=1 https://github.com/openresty/headers-more-nginx-module.git "$BUILD_DIR/headers-more-nginx-module"

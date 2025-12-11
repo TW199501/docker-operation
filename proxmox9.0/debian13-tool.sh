@@ -344,7 +344,7 @@ EOF
   if [ "$new_ip" = "$STATIC_IP" ]; then
     msg_ok "✓ IP地址配置成功: $STATIC_IP"
   else
-    msg_warning "⚠️ IP地址可能需要重啟系統才能生效"
+    msg_warning " IP地址可能需要重啟系統才能生效"
     msg_info "當前IP: $new_ip, 配置的IP: $STATIC_IP"
   fi
 
@@ -353,13 +353,13 @@ EOF
   if ping -c 3 -W 5 "$GATEWAY" >/dev/null 2>&1; then
     msg_ok "✓ 網關可達"
   else
-    msg_warning "⚠️ 無法連接到網關，請檢查網路配置"
+    msg_warning " 無法連接到網關，請檢查網路配置"
   fi
 
   if ping -c 3 -W 5 8.8.8.8 >/dev/null 2>&1; then
     msg_ok "✓ 外部網路可達"
   else
-    msg_warning "⚠️ 無法連接到外部網路"
+    msg_warning " 無法連接到外部網路"
   fi
 
   # 顯示最終配置
@@ -667,81 +667,23 @@ $(lsb_release -cs) stable" >/etc/apt/sources.list.d/docker.list
   systemctl enable --now docker >/dev/null 2>&1 || true
   msg_ok "Docker 與 Compose 安裝完成"
 
-  # 安裝完成後提供資源額度設定
-  if ! command -v whiptail >/dev/null 2>&1; then
-    return
-  fi
-
-  local cores mem_kb mem_g
-  cores=$(nproc 2>/dev/null || echo 1)
+  local mem_kb mem_g docker_mem_g final_mem final_cpu
   mem_kb=$(grep -i '^MemTotal:' /proc/meminfo 2>/dev/null | awk '{print $2}')
   mem_g=$((mem_kb / 1024 / 1024))
 
-  local base_mem base_cpu
-  # 依表格選基準方案
-  if [ "$cores" -le 2 ] && [ "$mem_g" -le 2 ]; then
-    base_mem="1536M"   # 2c2g
-    base_cpu="75%"
-  elif [ "$cores" -le 2 ] && [ "$mem_g" -le 4 ]; then
-    base_mem="3G"      # 2c4g
-    base_cpu="75%"
-  elif [ "$cores" -le 4 ] && [ "$mem_g" -le 4 ]; then
-    base_mem="3G"      # 4c4g
-    base_cpu="75%"
-  elif [ "$cores" -le 4 ] && [ "$mem_g" -le 6 ]; then
-    base_mem="5G"      # 4c6g
-    base_cpu="87%"
+  # 預設給 Docker 的記憶體 = 總 RAM - 1G，至少保留 1G 給 VM 其他服務
+  if [ "$mem_g" -gt 2 ]; then
+    docker_mem_g=$((mem_g - 1))
   else
-    base_mem="7G"      # 視為 4c8g 級距以上
-    base_cpu="90%"
+    # 很小的機器 (<=2G) 時，至少保留 1G，剩下全部給 Docker
+    docker_mem_g=$((mem_g - 1))
+    if [ "$docker_mem_g" -lt 1 ]; then
+      docker_mem_g=1
+    fi
   fi
 
-  # 衍生兩個放寬方案
-  local mem_plus cpu_plus
-  case "$base_mem" in
-    1536M) mem_plus="2048M" ;;
-    3G)    mem_plus="4G" ;;
-    5G)    mem_plus="6G" ;;
-    7G)    mem_plus="8G" ;;
-    *)     mem_plus="$base_mem" ;;
-  esac
-
-  case "$base_cpu" in
-    75%) cpu_plus="85%" ;;
-    87%) cpu_plus="93%" ;;
-    90%) cpu_plus="95%" ;;
-    *)   cpu_plus="$base_cpu" ;;
-  esac
-
-  local choice title
-  title="偵測到主機 ${cores} 核 / 約 ${mem_g}G RAM\n選擇要給 Docker daemon 的資源上限："
-
-  choice=$(whiptail --backtitle "ELF Debian13 ALL IN" \
-    --title "Docker 資源額度" \
-    --menu "$title" 15 70 3 \
-    "base" "基準：MemoryMax=${base_mem} CPUQuota=${base_cpu}" \
-    "more-mem" "加記憶體：MemoryMax=${mem_plus} CPUQuota=${base_cpu}" \
-    "more-cpu" "加CPU：MemoryMax=${base_mem} CPUQuota=${cpu_plus}" \
-    3>&1 1>&2 2>&3) || return
-
-  local final_mem final_cpu
-  case "$choice" in
-    base)
-      final_mem="$base_mem"
-      final_cpu="$base_cpu"
-      ;;
-    more-mem)
-      final_mem="$mem_plus"
-      final_cpu="$base_cpu"
-      ;;
-    more-cpu)
-      final_mem="$base_mem"
-      final_cpu="$cpu_plus"
-      ;;
-    *)
-      return
-      ;;
-  esac
+  final_mem="${docker_mem_g}G"
+  final_cpu="85%"
 
   mkdir -p /etc/systemd/system/docker.service.d
   cat >/etc/systemd/system/docker.service.d/override.conf <<EOF

@@ -18,13 +18,25 @@
 
 #### 使用方法
 
-第 1 階段：`debian13-vm.sh`  
-在 Proxmox 主機上建立 Debian 13 VM，並可選擇是否預嵌 Docker/Cloud-init。  
-執行方式：`sudo bash debian13-vm.sh` 或遠端 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"`。
+第 1 階段：`debian13-vm.sh`
+在 Proxmox 主機上建立 Debian 13 VM，並可選擇是否預嵌 Docker/Cloud-init。
+執行方式：
 
-第 2 階段：`debian13-tool.sh`  
-進入 VM 內執行互動式維護（帳號/SSH、Docker、網路、磁碟、排程等）。  
-執行方式：`sudo bash /path/to/debian13-tool.sh` 或遠端 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-tool.sh)"`。
+```bash
+sudo bash debian13-vm.sh
+# 或遠端
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-vm.sh)"
+```
+
+第 2 階段：`debian13-tool.sh`
+進入 VM 內執行互動式維護（帳號/SSH、Docker、網路、磁碟、排程等）。
+執行方式：
+
+```bash
+sudo bash /path/to/debian13-tool.sh
+# 或遠端
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TW199501/docker-operation/main/proxmox9.0/debian13-tool.sh)"
+```
 
 > 🔁 **建議流程**
 >
@@ -90,6 +102,10 @@ LXC (Linux Containers) 相關的管理工具。
 ## 🤝 貢獻
 
 歡迎提交 Issue 和 Pull Request 來改進這些腳本。
+
+
+
+build-nginx.sh
 
 ---
 

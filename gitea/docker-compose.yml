@@ -26,7 +26,6 @@ services:
       - INSTALL_LOCK=false
 
     volumes:
-      - ./data:/var/lib/gitea
-      - ./config:/etc/gitea
+      - /vol2/1000/ssd/apps/gitea/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
