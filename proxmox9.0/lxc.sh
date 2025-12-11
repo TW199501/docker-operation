@@ -70,7 +70,7 @@ function find_lxc_container() {
 
   # 詢問用戶輸入容器名稱或 ID
   while true; do
-    read -p "請輸入容器名稱或 ID: " CONTAINER_ID
+    read -r -p "請輸入容器名稱或 ID: " CONTAINER_ID
 
     if [ -n "$CONTAINER_ID" ]; then
       # 檢查是否為數字（ID）
@@ -113,11 +113,11 @@ function set_root_password() {
 
   while true; do
     # 輸入密碼
-    read -s -p "請輸入 root 用戶的新密碼: " ROOT_PASSWORD
+    read -r -s -p "請輸入 root 用戶的新密碼: " ROOT_PASSWORD
     echo
 
     # 確認密碼
-    read -s -p "請再次輸入密碼以確認: " ROOT_PASSWORD_CONFIRM
+    read -r -s -p "請再次輸入密碼以確認: " ROOT_PASSWORD_CONFIRM
     echo
 
     # 檢查密碼是否匹配
@@ -194,11 +194,11 @@ function install_ssh() {
 
 # 創建普通用戶（可選）
 function create_user() {
-  read -p "是否要創建普通用戶? (y/N): " CREATE_USER
+  read -r -p "是否要創建普通用戶? (y/N): " CREATE_USER
 
   if [[ "$CREATE_USER" =~ ^[Yy]$ ]]; then
     while true; do
-      read -p "請輸入用戶名: " USERNAME
+      read -r -p "請輸入用戶名: " USERNAME
       if [ -n "$USERNAME" ]; then
         break
       else
@@ -236,7 +236,7 @@ function input_ip_address() {
   local prompt=$1
   local var_name=$2
   while true; do
-    read -p "$prompt" input_value
+    read -r -p "$prompt" input_value
     if [ -n "$input_value" ]; then
       if validate_ip "$input_value"; then
         eval "$var_name=\"$input_value\""
@@ -270,7 +270,7 @@ function input_network_parameters() {
   fi
 
   # 輸入 DNS 服務器
-  read -p "請輸入 DNS 服務器 (默認: 8.8.8.8): " DNS_SERVER
+  read -r -p "請輸入 DNS 服務器 (默認: 8.8.8.8): " DNS_SERVER
   if [ -z "$DNS_SERVER" ]; then
     DNS_SERVER="8.8.8.8"  # 默認 DNS
   else
@@ -284,14 +284,14 @@ function input_network_parameters() {
 
 # 設置固定對外 IP 地址
 function set_static_ip() {
-  read -p "是否要設置固定對外 IP 地址? (y/N): " SET_STATIC_IP
+  read -r -p "是否要設置固定對外 IP 地址? (y/N): " SET_STATIC_IP
 
   if [[ "$SET_STATIC_IP" =~ ^[Yy]$ ]]; then
     # 詢問網絡配置方式
     echo -e "\n請選擇網絡配置方式："
     echo "1) 容器內部固定 IP (默認網橋模式)"
     echo "2) 容器直接對外固定 IP (MAC VLAN/IP VLAN 模式)"
-    read -p "請選擇 (1/2, 默認為 1): " NETWORK_MODE
+    read -r -p "請選擇 (1/2, 默認為 1): " NETWORK_MODE
 
     if [ "$NETWORK_MODE" = "2" ]; then
       # MAC VLAN/IP VLAN 模式
@@ -310,7 +310,7 @@ function set_static_ip() {
       echo "pct set $CONTAINER_ID -net0 ipvlan=vmbr0,ip=$STATIC_IP/$SUBNET_MASK,gw=$GATEWAY"
 
       msg_info "請手動執行上述命令後按回車繼續..."
-      read -p ""
+      read -r
 
       # 在容器內配置 DNS
       msg_info "正在配置 DNS..."
@@ -498,7 +498,7 @@ function main() {
 
   # 網絡診斷和修復
   echo -e "\n${YW}${BOLD}5. 網絡診斷${CL}"
-  read -p "是否要進行網絡診斷? (Y/n): " RUN_DIAGNOSTIC
+  read -r -p "是否要進行網絡診斷? (Y/n): " RUN_DIAGNOSTIC
   if [[ ! "$RUN_DIAGNOSTIC" =~ ^[Nn]$ ]]; then
     diagnose_network
   else

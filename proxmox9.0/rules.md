@@ -1,4 +1,4 @@
-**`ELF_AI_CORE_RULES.md`**
+# ELF_AI_CORE_RULES.md
 
 ---
 
@@ -288,6 +288,6 @@ If the AI is unsure whether a planned action is allowed under these rules, it MU
 
 The default is always: **Be conservative, be honest, and make it easy for humans to review and undo.**
 
-```
+```markdown
 請幫我翻議成繁體中文
 ```

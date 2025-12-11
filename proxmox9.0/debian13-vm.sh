@@ -516,33 +516,40 @@ function start_script() {
 }
 
 function configure_cloudinit_network() {
-  local ci_ip ci_prefix ci_gw ci_dns
+  local ci_ip ci_gw ci_dns
 
-  if ci_ip=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "VM IP" --inputbox "Set VM IPv4 address (e.g. 192.168.1.50)" 8 58 3>&1 1>&2 2>&3); then
+  # VM IP (full IPv4, no CIDR)
+  if ci_ip=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "VM IP" --inputbox "Set VM IPv4 address (e.g. 192.168.1.19)" 8 58 3>&1 1>&2 2>&3); then
     ci_ip=$(echo "$ci_ip" | tr -d ' ')
   else
     exit-script
   fi
 
-  if ci_prefix=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "NETMASK PREFIX" --inputbox "Set prefix length (e.g. 24 for 255.255.255.0)" 8 58 24 3>&1 1>&2 2>&3); then
-    ci_prefix=$(echo "$ci_prefix" | tr -d ' ')
-  else
+  if ! echo "$ci_ip" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+    whiptail --backtitle "ELF Debian13 ALL IN" --title "INVALID IP" --msgbox "IP must be a valid IPv4 address, e.g. 192.168.1.19" 8 70
     exit-script
   fi
 
+  # Gateway (full IPv4, no CIDR)
   if ci_gw=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "GATEWAY" --inputbox "Set default gateway (e.g. 192.168.1.254)" 8 58 3>&1 1>&2 2>&3); then
     ci_gw=$(echo "$ci_gw" | tr -d ' ')
   else
     exit-script
   fi
 
+  if ! echo "$ci_gw" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+    whiptail --backtitle "ELF Debian13 ALL IN" --title "INVALID GATEWAY" --msgbox "Gateway must be a valid IPv4 address, e.g. 192.168.1.254" 8 70
+    exit-script
+  fi
+
+  # DNS
   if ci_dns=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "DNS" --inputbox "Set DNS server (e.g. 8.8.8.8)" 8 58 8.8.8.8 3>&1 1>&2 2>&3); then
     ci_dns=$(echo "$ci_dns" | tr -d ' ')
   else
     exit-script
   fi
 
-  CI_IPCFG="ip=${ci_ip}/${ci_prefix},gw=${ci_gw}"
+  CI_IPCFG="ip=${ci_ip}/24,gw=${ci_gw}"
   CI_DNS="$ci_dns"
 }
 
