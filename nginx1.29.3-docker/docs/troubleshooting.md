@@ -4,13 +4,13 @@
 
 ### 1. 容器啟動失敗
 
-#### 症狀
+#### 症狀（容器啟動失敗）
 
 - 容器無法啟動
 - 容器啟動後立即退出
 - 端口占用錯誤
 
-#### 診斷步驟
+#### 診斷步驟（容器啟動失敗）
 
 ```bash
 # 檢查容器日誌
@@ -25,7 +25,7 @@ netstat -tlnp | grep :443
 systemctl status docker
 ```
 
-#### 解決方案
+#### 解決方案（容器啟動失敗）
 
 1. **端口占用**
 
@@ -53,13 +53,13 @@ systemctl status docker
 
 ### 2. Nginx 配置錯誤
 
-#### 症狀
+#### 症狀（Nginx 配置錯誤）
 
 - Nginx 無法啟動
 - 配置語法錯誤
 - 404/500 錯誤頁面
 
-#### 診斷步驟
+#### 診斷步驟（Nginx 配置）
 
 ```bash
 # 測試配置語法
@@ -72,7 +72,7 @@ docker exec elf-nginx cat /etc/nginx/nginx.conf
 docker exec elf-nginx tail -f /var/log/nginx/error.log
 ```
 
-#### 解決方案
+#### 解決方案（Nginx 配置）
 
 1. **語法錯誤**
 
@@ -98,13 +98,13 @@ docker exec elf-nginx tail -f /var/log/nginx/error.log
 
 ### 3. Keepalived 故障轉移問題
 
-#### 症狀
+#### 症狀（Keepalived 故障轉移）
 
 - 虛擬 IP 未正確綁定
 - VRRP 通信失敗
 - 主從切換異常
 
-#### 診斷步驟
+#### 診斷步驟（Keepalived 故障轉移）
 
 ```bash
 # 檢查 VRRP 狀態
@@ -117,7 +117,7 @@ bash /usr/local/sbin/check_nginx.sh
 ip -4 addr show dev eth0 | grep 192.168.25.250
 ```
 
-#### 解決方案
+#### 解決方案（Keepalived 故障轉移）
 
 1. **VRRP 通信問題**
 
@@ -144,13 +144,13 @@ ip -4 addr show dev eth0 | grep 192.168.25.250
 
 ### 4. GeoIP 更新失敗
 
-#### 症狀
+#### 症狀（GeoIP 更新）
 
 - GeoIP 資料庫過期
 - 更新腳本執行失敗
 - 地理位置識別異常
 
-#### 診斷步驟
+#### 診斷步驟（GeoIP 更新）
 
 ```bash
 # 手動執行更新腳本
@@ -163,7 +163,7 @@ docker exec elf-nginx ls -la /usr/share/GeoIP/
 tail -f /var/log/update_geoip.log
 ```
 
-#### 解決方案
+#### 解決方案（GeoIP 更新）
 
 1. **網路連接問題**
 
@@ -188,13 +188,13 @@ tail -f /var/log/update_geoip.log
 
 ### 5. ModSecurity WAF 問題
 
-#### 症狀
+#### 症狀（ModSecurity WAF）
 
 - WAF 規則未生效
 - 誤報/漏報
 - 效能下降
 
-#### 診斷步驟
+#### 診斷步驟（ModSecurity WAF）
 
 ```bash
 # 檢查 ModSecurity 狀態
@@ -207,7 +207,7 @@ docker exec elf-nginx tail -f /var/log/modsecurity/audit.log
 curl -I "http://localhost/?test=<script>alert(1)</script>"
 ```
 
-#### 解決方案
+#### 解決方案（ModSecurity WAF）
 
 1. **規則未載入**
 

@@ -199,7 +199,6 @@ cat > "$CONF" <<EOF
 global_defs {
     enable_script_security
     script_user root
-    log_file /var/log/keepalived/keepalived.log
 }
 
 vrrp_script chk_nginx {

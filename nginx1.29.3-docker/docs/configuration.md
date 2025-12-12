@@ -2,7 +2,7 @@
 
 ## 📁 項目結構
 
-```
+```text
 nginx1.29.3-docker/
 ├── Dockerfile                     # 容器構建配置
 ├── docker-compose.yml             # 容器編排配置（elf-nginx + haproxy）
@@ -122,7 +122,7 @@ networks:
 
 ## 🏗️ Nginx 配置文件結構
 
-```
+```text
 /etc/nginx/
 ├── nginx.conf                    # 主配置文件
 ├── default.modules.main.conf     # 動態模組載入配置

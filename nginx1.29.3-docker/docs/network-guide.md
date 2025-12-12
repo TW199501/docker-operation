@@ -88,7 +88,7 @@ networks:
 - 宿主機（Windows / Linux）IP：`192.168.25.10`
 - 上面跑一個 nginxWebUI，在宿主機的 8080 port：
 
-  ```
+  ```text
   http://192.168.25.10:8080
   ```
 

@@ -45,7 +45,7 @@ docker-compose -f docker-compose.build.yml up -d --build
 
 ### 核心檔案
 
-```
+```text
 nginx1.29.3-docker/
 ├── Dockerfile                     # 容器構建配置
 ├── build-nginx.sh                 # Nginx 編譯腳本

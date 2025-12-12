@@ -1,32 +1,32 @@
-name: elfhaproxy
+name: haprox
 services:
   elf-nginx:
     container_name: elf-nginx
-    image: tw199501/nginx:1.29.3
+    image: tw199501/nginx:latest
     restart: unless-stopped
     environment:
       - TZ=Asia/Taipei
     volumes:
-      - /opt/nginx-stack/nginx:/etc/nginx
-      - /opt/nginx-stack/nginx-logs:/var/log/nginx
+      - ./nginx/etc:/etc/nginx
+      - ./nginx/logs:/var/log/nginx
+      - ./nginx/cache:/var/cache/nginx
+      - ./nginx/geoip:/usr/share/GeoIP
+      - ./keepalived:/opt/keepalived
     networks:
       - elf-internal
-
   haproxy:
     container_name: haproxy
-    image: tw199501/haproxy:3.3.0
+    image: tw199501/haproxy:latest
     restart: unless-stopped
     depends_on:
       - elf-nginx
     ports:
-      - "80:80"
-      - "443:443"
-      - "8404:8404"
+      - 80:80
+      - 443:443
+      - 8404:8404
     volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy:/usr/local/etc/haproxy
     networks:
       - elf-internal
-
 networks:
-  elf-internal:
-
+  elf-internal: null

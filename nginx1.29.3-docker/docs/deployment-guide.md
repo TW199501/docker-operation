@@ -69,7 +69,7 @@ docker compose -f nginx-ui-compose.yml up -d
 
 ### 4. 使用 Nginx UI 管理設定（方案B）
 
-```
+```text
 流量路徑: Client -> haproxy(80/443) -> elf-nginx:80
 配置路徑: /opt/nginx-stack/nginx <-> elf-nginx:/etc/nginx
           /opt/nginx-stack/nginx <-> nginx-ui:/etc/nginx
