@@ -1,23 +1,5 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2025 community-scripts ORG
-# Author: MickLesk (CanbiZ)
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-
-# ==============================================================================
-# EMBEDDED API.FUNC - TELEMETRY & DIAGNOSTICS API (SECURE VERSION)
-# ==============================================================================
-#
-# Provides functions for sending anonymous telemetry data to Community-Scripts
-# API for analytics and diagnostics purposes.
-#
-# Security improvements:
-#   - Functions embedded directly (no dynamic loading)
-#   - HTTPS certificate validation enabled
-#   - Privacy-respecting anonymous telemetry
-#   - Error handling and validation added
-#
-# ==============================================================================
 
 explain_exit_code() {
   local code="$1"
@@ -276,12 +258,12 @@ function default_settings() {
   VMID=$(get_valid_nextid)
   FORMAT=",efitype=4m"
   MACHINE=""
-  DISK_SIZE="10G"
+  DISK_SIZE="30G"
   DISK_CACHE=""
   HN="debian13"
   CPU_TYPE=""
   CORE_COUNT="2"
-  RAM_SIZE="4096"
+  RAM_SIZE="2048"
   BRG="vmbr0"
   MAC="$GEN_MAC"
   VLAN=""
@@ -589,7 +571,7 @@ fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the Debian 13 Qcow2 Disk Image"
-URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
+URL=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-amd64.qcow2
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 curl -f#SL -o "$(basename "$URL")" "$URL"
