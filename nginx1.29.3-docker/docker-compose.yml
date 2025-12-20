@@ -7,17 +7,20 @@ services:
     environment:
       - TZ=Asia/Taipei
     volumes:
-      - ./nginx/etc:/etc/nginx
-      - ./nginx/logs:/var/log/nginx
-      - ./nginx/cache:/var/cache/nginx
-      - ./nginx/geoip:/usr/share/GeoIP
-      - ./keepalived:/opt/keepalived
+      - /etc/nginx:/etc/nginx
+      - /usr/lib/nginx/modules:/usr/lib/nginx/modules
+      - /var/log/nginx:/var/log/nginx
+      - /var/cache/nginx:/var/cache/nginx
+      - /usr/share/GeoIP:/usr/share/GeoIP
+      - /opt/stacks/haprox/keepalived:/opt/keepalived
     networks:
       - elf-internal
   haproxy:
     container_name: haproxy
     image: tw199501/haproxy:latest
     restart: unless-stopped
+    environment:
+      - TZ=Asia/Taipei
     depends_on:
       - elf-nginx
     ports:
@@ -25,7 +28,7 @@ services:
       - 443:443
       - 8404:8404
     volumes:
-      - ./haproxy:/usr/local/etc/haproxy
+      - /opt/stacks/haprox/haproxy:/usr/local/etc/haproxy
     networks:
       - elf-internal
 networks:
