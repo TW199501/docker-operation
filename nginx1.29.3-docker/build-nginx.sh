@@ -358,14 +358,11 @@ module_G_ensure_nginx_run_user
 
 # 想載哪些 .so 就列在這裡；不存在就自動跳過
 MODULES=(
-  ngx_http_geoip2_module.so
   ngx_http_brotli_filter_module.so
   ngx_http_brotli_static_module.so
   ngx_http_headers_more_filter_module.so
   ngx_http_image_filter_module.so
   ngx_http_js_module.so
-  ngx_stream_module.so
-  ngx_stream_geoip2_module.so
   ngx_stream_js_module.so
 )
 
