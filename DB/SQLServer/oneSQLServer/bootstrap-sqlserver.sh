@@ -67,8 +67,8 @@ ask_yes_no() {
     case "$answer" in
       [Yy]) eval "$var_name=\"y\""; return 0 ;;
       [Nn]) eval "$var_name=\"n\""; return 0 ;;
+      *) printf "請輸入 y 或 n。\n" ;;
     esac
-    printf "請輸入 y 或 n。\n"
   done
 }
 
