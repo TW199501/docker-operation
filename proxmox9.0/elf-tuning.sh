@@ -888,65 +888,92 @@ function apply_persistent_tuning_all() {
 echo
 
 # Docker
-if ask_run "Docker / Compose" "是否安裝 Docker Engine 與 Docker Compose？" "0"; then
+already_docker=0
+if command -v docker &> /dev/null; then
+    already_docker=1
+fi
+if ask_run "Docker / Compose" "是否安裝 Docker Engine 與 Docker Compose？" "$already_docker"; then
   install_docker_stack
+else
+  msg_info "已跳過 Docker 安裝"
 fi
 
 # QEMU Guest Agent（偵測是否已啟用）
 if systemctl is-enabled qemu-guest-agent >/dev/null 2>&1; then
   if ask_run "QEMU Guest Agent" "qemu-guest-agent 已啟用。\n是否仍要重新確認/安裝？" "1"; then
     install_guest_agent
+  else
+    msg_info "已跳過 QEMU Guest Agent 安裝"
   fi
 else
   if ask_run "QEMU Guest Agent" "是否安裝並啟用 qemu-guest-agent？" "0"; then
     install_guest_agent
+  else
+    msg_info "已跳過 QEMU Guest Agent 安裝"
   fi
 fi
 
 # root 密碼（無可靠偵測，保留手動選）
-if whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT 密碼" --yesno "是否設定 root 用戶新密碼？" 10 60; then
+already_rootpw=0  # 無可靠檢測，固定為未設定
+if ask_run "ROOT 密碼" "是否設定 root 用戶新密碼？" "$already_rootpw"; then
   set_root_password
+else
+  msg_info "已跳過 root 密碼設定"
 fi
 
 # SSH（已設定則預設 NO）
 already_ssh=0; is_ssh_configured_root_pw_login && already_ssh=1
 if ask_run "SSH 服務" "是否安裝並啟用 SSH（允許 root 密碼登入）？" "$already_ssh"; then
   configure_ssh
+else
+  msg_info "已跳過 SSH 服務設定"
 fi
 
 # 固定 IP（已有靜態設定檔則預設 NO）
 already_ip=0; is_static_ip_configured_any && already_ip=1
 if ask_run "固定 IP / DNS" "是否要配置固定 IP（gateway/網段取當下）？" "$already_ip"; then
   configure_static_ip
+else
+  msg_info "已跳過固定 IP 設定"
 fi
 
 # 持久化性能調優（已套用則預設 NO）
-already_tune=0; is_persistent_tuning_applied && already_tune=1
-if ask_run "持久化性能調優" "是否套用「持久化性能調優 + DNS 優化 + 固定停用服務(mysql除外)」？\n\n停用：bluetooth / cups / apache2\n保留：mysql" "$already_tune"; then
+already_tuned=0; is_persistent_tuning_applied && already_tuned=1
+if ask_run "持久化性能調優" "是否要套用持久化性能調優（含 DNS + 固定停用服務/mysql除外）？" "$already_tuned"; then
   apply_persistent_tuning_all
+else
+  msg_info "已跳過持久化性能調優"
 fi
 
 # 大文件優化（已設定則預設 NO）
 already_lf=0; is_largefile_tuned && already_lf=1
 if ask_run "大文件優化" "是否要套用大文件處理優化？" "$already_lf"; then
   optimize_for_large_files
+else
+  msg_info "已跳過大文件優化"
 fi
 
 # 擴展硬碟（沒有空間也會自動略過）
 if whiptail --backtitle "ELF Debian13 ALL IN" --title "磁碟擴展" --yesno "是否要擴展硬碟（含 LVM）？" 10 60; then
   expand_disk
+else
+  msg_info "已跳過硬碟擴展"
 fi
 
 # 網路傳輸優化（已設定檔則預設 NO）
 already_net=0; is_net_opt_tuned && already_net=1
 if ask_run "網路優化" "是否要套用網路傳輸優化（BBR/fq 等）？" "$already_net"; then
   optimize_network_stack
+else
+  msg_info "已跳過網路優化"
 fi
 
 # Log 清理排程（是否已有 cron 檔）
 already_log=0; [[ -f /etc/cron.d/elf-log-cleanup ]] && already_log=1
 if ask_run "Log 清理排程" "是否設定 log 定期清理排程？" "$already_log"; then
   schedule_log_cleanup
+else
+  msg_info "已跳過 log 清理排程"
 fi
 
 whiptail --backtitle "ELF Debian13 ALL IN" --title "完成" --msgbox \
