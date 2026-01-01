@@ -129,16 +129,17 @@ install_package_if_needed whiptail
 
 function backup_file_ts() {
   local f="$1"
-  [[ -e "$f" ]] || return 0
-  local ts
-  ts="$(date +%Y%m%d_%H%M%S)"
-  cp -a "$f" "${f}.bak.${ts}"
+  if [ -f "$f" ]; then
+    local ts
+    ts="$(date +%Y%m%d_%H%M%S)"
+    cp -a "$f" "${f}.bak.${ts}"
+  fi
 }
 
 function write_file_if_changed() {
   local path="$1"
   local content="$2"
-  if [[ -e "$path" ]]; then
+  if [ -e "$path" ]; then
     if diff -q <(printf '%s\n' "$content") "$path" >/dev/null 2>&1; then
       return 0
     fi
@@ -172,7 +173,9 @@ function is_static_ip_configured_any() {
 
   if [[ -f "/etc/systemd/network/10-${iface}.network" ]]; then return 0; fi
   if [[ -d /etc/NetworkManager/system-connections ]] && ls /etc/NetworkManager/system-connections/*.nmconnection >/dev/null 2>&1; then
-    grep -Rqs "interface-name=${iface}" /etc/NetworkManager/system-connections 2>/dev/null && return 0 || true
+    if grep -Rqs "interface-name=${iface}" /etc/NetworkManager/system-connections 2>/dev/null; then
+      return 0
+    fi
   fi
   if [[ -f /etc/network/interfaces ]] && grep -Eq "iface\s+${iface}\s+inet\s+static" /etc/network/interfaces 2>/dev/null; then return 0; fi
   return 1
@@ -279,7 +282,9 @@ function disable_ipv6() {
       echo 'GRUB_CMDLINE_LINUX="ipv6.disable=1"' >> "$GRUB_FILE"
     fi
 
-    command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1 || true
+    if command -v update-grub >/dev/null 2>&1; then
+      update-grub >/dev/null 2>&1 || true
+    fi
     msg_ok "✓ IPv6 功能已禁用（重啟後完全生效）"
   else
     msg_warning "⚠️ 找不到 GRUB 設定檔，僅停用 IPv6(runtime)"
@@ -372,7 +377,11 @@ function configure_static_ip() {
   local dns="${dns1}"
 
   # 備份
-  [[ -f /etc/network/interfaces ]] && cp /etc/network/interfaces /etc/network/interfaces.backup 2>/dev/null || true
+  if [ -f /etc/network/interfaces ]; then
+    if [ -f /etc/network/interfaces ]; then
+      cp /etc/network/interfaces /etc/network/interfaces.backup 2>/dev/null || true
+    fi
+  fi
 
   # 判斷 network manager
   local network_manager=""
@@ -859,7 +868,10 @@ function apply_persistent_tuning_all() {
     backup_file_ts "$GRUB_FILE"
     disable_thp_runtime_only
     grub_add_param_once "GRUB_CMDLINE_LINUX_DEFAULT" "transparent_hugepage=never"
-    command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1 || true
+    if command -v update-grub >/dev/null 2>&1; then
+      update-grub >/dev/null 2>&1 || true
+    fi
+    msg_ok "✓ IPv6 功能已禁用（重啟後完全生效）"
   else
     disable_thp_runtime_only
   fi
