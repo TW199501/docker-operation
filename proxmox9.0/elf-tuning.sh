@@ -1,11 +1,29 @@
 #!/usr/bin/env bash
-# Debian 13 VM 工具腳本（Checklist UI 版）
-# 規則：勾選 = 執行；不勾選 = 跳過
-# 特點：
-# - 單一 checklist UI，一次選完要做的項目
-# - 依「已設定偵測」預設 OFF，避免你重跑時一直重做
-# - 固定 IP：自動取當下介面 / 當下 gateway / 當下 prefix；有現有 IP 時可只輸入最後一碼
-# - 持久化調優：CPU governor、sysctl、THP、I/O scheduler/queue、fstrim、irqbalance、DNS、停用服務(mysql除外)
+# Debian 13 VM 工具腳本（Checklist UI 版 / 適合上傳 GitHub）
+#
+# 規則：
+#   - 「勾選」= 執行 / 安裝；「不勾選」= 跳過
+#   - 每個項目預設：已設定 -> OFF；未設定 -> ON（避免重跑一直重做）
+#
+# 內容：
+#   1) 持久化性能調優：CPU governor / sysctl / THP / I/O scheduler+queue / fstrim / irqbalance / DNS / 停用服務(mysql除外)
+#   2) 固定 IP / DNS：自動取當下 iface / gateway / prefix；有現有 IP 時可只輸入最後一碼
+#   3) SSH：允許 root 密碼登入
+#   4) qemu-guest-agent
+#   5) root 密碼
+#   6) Docker / Compose
+#   7) 大檔 I/O 調優（dirty_ratio 等）
+#   8) 擴展硬碟（含 LVM）
+#   9) 網路傳輸優化（BBR/fq 等）
+#  10) Log 清理排程
+#
+# Log：
+#   - 執行細節寫到 /var/log/elf-tools.log
+#
+# 注意：
+#   - 本腳本需要互動式 TTY（因為使用 whiptail）
+#   - 若系統未安裝 whiptail，請先手動：
+#       apt-get update && apt-get install -y whiptail
 
 if [ -z "${BASH_VERSION:-}" ]; then
   exec bash "$0" "$@"
@@ -13,19 +31,26 @@ fi
 
 set -euo pipefail
 
-# ---- 當次 shell 的檔案上限（非持久化）----
+export DEBIAN_FRONTEND=noninteractive
+
+# -------- 一次性 ulimit（不持久化）--------
 ulimit -n 65536 2>/dev/null || true
 ulimit -f unlimited 2>/dev/null || true
 
-# ---- Locale / whiptail 顏色 ----
+# -------- Locale / whiptail 顏色 --------
 export LC_ALL="${LC_ALL:-C.UTF-8}"
 export LANG="${LANG:-C.UTF-8}"
+export TERM="${TERM:-xterm-256color}"
 export NEWT_COLORS='root=white,blue border=white,blue title=white,blue window=white,blue textbox=black,white button=white,blue actbutton=yellow,blue entry=black,white actsellist=white,blue sellist=black,white'
 
-# ========== 可調參數 ==========
+# ================= 可調參數 =================
+LOG_FILE="/var/log/elf-tools.log"
+
 DNS_PRIMARY="1.1.1.1 8.8.8.8"
 DNS_FALLBACK="1.0.0.1 8.8.4.4"
-SERVICES_TO_DISABLE=(bluetooth cups apache2)   # mysql 不會被停用
+
+# mysql 除外：不要放 mysql/mariadb 相關 service 在這裡
+SERVICES_TO_DISABLE=(bluetooth cups apache2)
 
 SYSCTL_TUNE_FILE="/etc/sysctl.d/99-elf-tuning.conf"
 SYSCTL_TUNE_CONTENT=$(cat <<'EOF'
@@ -61,13 +86,10 @@ EOF
 
 IO_TUNE_SCRIPT="/usr/local/sbin/elf-io-tune.sh"
 IO_TUNE_SERVICE="/etc/systemd/system/elf-io-tune.service"
-NR_REQUESTS_DEFAULT=128
-READ_AHEAD_KB_DEFAULT=256
-
 GRUB_FILE="/etc/default/grub"
 
-# ========== UI ==========
-function header_info {
+# ================= UI / util =================
+header_info() {
   clear
   cat <<"EOF"
     ______ _       ______          _____       _      _           ______      _ _
@@ -77,69 +99,52 @@ function header_info {
    | |____| |____ | |__| (_| | (__| |__| |  __| | (__| |_| | | | | |____ >  <| | |
    |______|______||______\__,_|\___|_____/ \___|_|\___|\__|_| |_| |______/_/\_\|_| |
 
-            ELF Debian13 All-IN Tools (Checklist UI)
+                 ELF Debian13 All-IN Tools (Checklist UI)
 EOF
 }
-
-header_info
-echo -e "\n Loading...\n"
-
-# ---- root 檢查 ----
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  echo "請以 root 身份運行此腳本"
-  echo "使用 sudo 或切換到 root 用戶"
-  exit 1
-fi
-
-# ---- whiptail 檢查 ----
-if ! command -v whiptail >/dev/null 2>&1; then
-  echo "[ERROR] 系統缺少 whiptail。請先手動安裝一次："
-  echo "  apt-get update && apt-get install -y whiptail"
-  exit 1
-fi
-
-# ---- 等待 systemd ready ----
-echo "等待系統初始化完成..."
-for i in {1..30}; do
-  if systemctl is-system-running >/dev/null 2>&1; then
-    if [ "$(systemctl is-system-running 2>/dev/null || true)" = "running" ]; then
-      echo "系統已準備就緒"
-      break
-    fi
-  fi
-  echo -n "."
-  sleep 2
-done
-echo ""
 
 YW=$(echo "\033[33m")
 RD=$(echo "\033[01;31m")
 GN=$(echo "\033[1;92m")
 CL=$(echo "\033[m")
 BOLD=$(echo "\033[1m")
-function msg_info()    { echo -e "${YW}${BOLD}$1${CL}"; }
-function msg_ok()      { echo -e "${GN}${BOLD}$1${CL}"; }
-function msg_error()   { echo -e "${RD}${BOLD}$1${CL}"; }
-function msg_warning() { echo -e "${YW}${BOLD}$1${CL}"; }
+msg_info()    { echo -e "${YW}${BOLD}$1${CL}"; }
+msg_ok()      { echo -e "${GN}${BOLD}$1${CL}"; }
+msg_error()   { echo -e "${RD}${BOLD}$1${CL}"; }
+msg_warning() { echo -e "${YW}${BOLD}$1${CL}"; }
 
-# ========== 基礎工具 ==========
-function install_package_if_needed() {
+ensure_log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
+  touch "$LOG_FILE" 2>/dev/null || true
+}
+
+log_block() {
+  ensure_log
+  {
+    echo
+    echo "=================================================="
+    echo "[$(date '+%F %T')] $1"
+    echo "=================================================="
+  } >>"$LOG_FILE" 2>&1
+}
+
+install_package_if_needed() {
   local pkg="$1"
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-    apt-get update -qq
-    apt-get install -y "$pkg"
+    apt-get update -qq >>"$LOG_FILE" 2>&1 || true
+    apt-get install -y "$pkg" >>"$LOG_FILE" 2>&1
   fi
 }
 
-function backup_file_ts() {
+backup_file_ts() {
   local f="$1"
   [[ -e "$f" ]] || return 0
   local ts
   ts="$(date +%Y%m%d_%H%M%S)"
-  cp -a "$f" "${f}.bak.${ts}"
+  cp -a "$f" "${f}.bak.${ts}" >>"$LOG_FILE" 2>&1 || true
 }
 
-function write_file_if_changed() {
+write_file_if_changed() {
   local path="$1"
   local content="$2"
   if [[ -e "$path" ]]; then
@@ -152,15 +157,47 @@ function write_file_if_changed() {
   printf '%s\n' "$content" > "$path"
 }
 
-# ========== 狀態偵測（用於 checklist 預設 OFF） ==========
-function is_ipv6_disabled() {
+# 讓 checklist 的「執行」不會把畫面跳回 shell：所有 stdout/stderr 都寫 log
+run_one() {
+  local tag="$1"; shift
+  local desc="$1"; shift
+
+  whiptail --backtitle "ELF Debian13 ALL IN" --title "執行中" \
+    --infobox "正在執行：${desc}\n\nLog：${LOG_FILE}\n\n請稍候..." 12 70
+
+  log_block "START [$tag] $desc"
+
+  set +e
+  "$@" >>"$LOG_FILE" 2>&1
+  local rc=$?
+  set -e
+
+  if [ "$rc" -ne 0 ]; then
+    log_block "FAIL  [$tag] rc=$rc"
+    whiptail --backtitle "ELF Debian13 ALL IN" --title "失敗" \
+      --msgbox "執行失敗：${desc}\n\nexit code：${rc}\n\n請看 log：${LOG_FILE}" 12 70
+    return "$rc"
+  fi
+
+  log_block "OK    [$tag]"
+  return 0
+}
+
+selected() {
+  local chosen="$1"
+  local key="$2"
+  echo "$chosen" | grep -qw "$key"
+}
+
+# ================= 狀態偵測（預設 OFF 用） =================
+is_ipv6_disabled() {
   local rt=0 gr=0
   [[ -f /proc/sys/net/ipv6/conf/all/disable_ipv6 ]] && [[ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0)" = "1" ]] && rt=1
   [[ -f "$GRUB_FILE" ]] && grep -q "ipv6.disable=1" "$GRUB_FILE" 2>/dev/null && gr=1
   [[ "$rt" = "1" && "$gr" = "1" ]]
 }
 
-function is_ssh_configured_root_pw_login() {
+is_ssh_configured_root_pw_login() {
   systemctl is-enabled ssh >/dev/null 2>&1 || systemctl is-enabled sshd >/dev/null 2>&1 || return 1
   [[ -f /etc/ssh/sshd_config ]] || return 1
   grep -Eq '^\s*PermitRootLogin\s+yes\b' /etc/ssh/sshd_config || return 1
@@ -168,7 +205,7 @@ function is_ssh_configured_root_pw_login() {
   return 0
 }
 
-function is_static_ip_configured_any() {
+is_static_ip_configured_any() {
   local iface
   iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')"
   iface="${iface:-eth0}"
@@ -181,21 +218,21 @@ function is_static_ip_configured_any() {
   return 1
 }
 
-function is_largefile_tuned() {
+is_largefile_tuned() {
   [[ -f /etc/sysctl.d/99-io-tuning.conf ]] || return 1
   grep -Eq '^\s*vm\.dirty_ratio\s*=\s*5\b' /etc/sysctl.d/99-io-tuning.conf || return 1
   grep -Eq '^\s*vm\.dirty_background_ratio\s*=\s*2\b' /etc/sysctl.d/99-io-tuning.conf || return 1
   return 0
 }
 
-function is_net_opt_tuned() {
+is_net_opt_tuned() {
   [[ -f /etc/sysctl.d/99-net-opt.conf ]] || return 1
   grep -Eq '^\s*net\.core\.default_qdisc\s*=\s*fq\b' /etc/sysctl.d/99-net-opt.conf || return 1
   grep -Eq '^\s*net\.ipv4\.tcp_fastopen\s*=\s*3\b' /etc/sysctl.d/99-net-opt.conf || return 1
   return 0
 }
 
-function is_persistent_tuning_applied() {
+is_persistent_tuning_applied() {
   [[ -f /etc/default/cpufrequtils ]] && grep -q 'GOVERNOR="performance"' /etc/default/cpufrequtils || return 1
   [[ -f "$SYSCTL_TUNE_FILE" ]] || return 1
   systemctl is-enabled irqbalance >/dev/null 2>&1 || return 1
@@ -209,29 +246,28 @@ function is_persistent_tuning_applied() {
   return 0
 }
 
-# ========== 功能：root 密碼 ==========
-function set_root_password() {
+# ================= 功能：root 密碼 =================
+set_root_password() {
   while true; do
-    ROOT_PASSWORD=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT PASSWORD" --passwordbox "請輸入 root 用戶的新密碼" 10 60 3>&1 1>&2 2>&3) || return
-    ROOT_PASSWORD_CONFIRM=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT PASSWORD" --passwordbox "請再次輸入以確認" 10 60 3>&1 1>&2 2>&3) || return
-    if [ -z "$ROOT_PASSWORD" ]; then
+    local p1 p2
+    p1=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT PASSWORD" --passwordbox "請輸入 root 用戶的新密碼" 10 60 3>&1 1>&2 2>&3) || return 0
+    p2=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT PASSWORD" --passwordbox "請再次輸入以確認" 10 60 3>&1 1>&2 2>&3) || return 0
+    if [ -z "$p1" ]; then
       whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "密碼不能為空" 8 50
       continue
     fi
-    if [ "$ROOT_PASSWORD" = "$ROOT_PASSWORD_CONFIRM" ]; then
-      echo "root:$ROOT_PASSWORD" | chpasswd && msg_ok "root 用戶密碼設置成功" && break
-      whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "密碼設置失敗，請再試一次" 8 60
-    else
+    if [ "$p1" != "$p2" ]; then
       whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "兩次輸入不一致，請重試" 8 60
+      continue
     fi
+    echo "root:$p1" | chpasswd >>"$LOG_FILE" 2>&1 && return 0
   done
 }
 
-# ========== 功能：SSH ==========
-function configure_ssh() {
-  msg_info "正在配置 SSH..."
-  apt-get update -qq
-  apt-get install -y openssh-client openssh-server
+# ================= 功能：SSH =================
+configure_ssh() {
+  install_package_if_needed openssh-client
+  install_package_if_needed openssh-server
 
   sed -i \
     -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' \
@@ -239,14 +275,12 @@ function configure_ssh() {
     -e 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' \
     /etc/ssh/sshd_config
 
-  ssh-keygen -A
-  systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || true
-  msg_ok "✓ SSH 配置完成"
+  ssh-keygen -A >>"$LOG_FILE" 2>&1 || true
+  systemctl restart sshd >>"$LOG_FILE" 2>&1 || systemctl restart ssh >>"$LOG_FILE" 2>&1 || true
 }
 
-# ========== 功能：禁用 IPv6 ==========
-function disable_ipv6() {
-  msg_info "正在關閉 IPv6 功能..."
+# ================= 功能：禁用 IPv6 =================
+disable_ipv6() {
   echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || true
   echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6 2>/dev/null || true
 
@@ -257,15 +291,12 @@ function disable_ipv6() {
     else
       echo 'GRUB_CMDLINE_LINUX="ipv6.disable=1"' >> "$GRUB_FILE"
     fi
-    command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1 || true
-    msg_ok "✓ IPv6 功能已禁用（重啟後完全生效）"
-  else
-    msg_warning "⚠️ 找不到 GRUB 設定檔，僅停用 IPv6(runtime)"
+    command -v update-grub >/dev/null 2>&1 && update-grub >>"$LOG_FILE" 2>&1 || true
   fi
 }
 
-# ========== 工具：prefix -> netmask ==========
-function prefix2netmask() {
+# ================= 工具：prefix -> netmask =================
+prefix2netmask() {
   local p="$1"
   local mask=""
   local i
@@ -283,14 +314,17 @@ function prefix2netmask() {
   echo "$mask"
 }
 
-# ========== 功能：固定 IP（gateway/網段取當下） ==========
-function configure_static_ip() {
-  # IPv6：在固定 IP 這個步驟內詢問一次（已禁用則預設不動）
-  local ipv6_default="OFF"
-  is_ipv6_disabled && ipv6_default="OFF" || ipv6_default="OFF"
-
+# ================= 功能：固定 IP / DNS =================
+configure_static_ip() {
+  # 只問一次：是否禁用 IPv6
+  local ipv6_prompt="是否同時禁用 IPv6？\n\n目前狀態："
+  if is_ipv6_disabled; then
+    ipv6_prompt+="已禁用\n\n建議：選 NO（除非你想重新套一次）"
+  else
+    ipv6_prompt+="未禁用\n\n建議：選 YES（若你確定不需要 IPv6）"
+  fi
   if whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP - IPv6" \
-    --yesno "是否同時禁用 IPv6？（已禁用則選 NO）" 10 60; then
+    --yesno "$ipv6_prompt" 14 70; then
     disable_ipv6
   fi
 
@@ -310,31 +344,32 @@ function configure_static_ip() {
     local base3 last
     base3="$(echo "$current_ip" | awk -F. '{print $1"."$2"."$3}')"
     last=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" \
-      --inputbox "介面：$iface\n目前 IP：$current_ip/$prefix\n請輸入「最後一碼」(1~254)\n\n例如輸入 50 => ${base3}.50" 12 70 "" \
-      3>&1 1>&2 2>&3) || return
+      --inputbox "介面：$iface\n目前 IP：$current_ip/$prefix\n\n請輸入「最後一碼」(1~254)\n例如輸入 50 => ${base3}.50" 13 75 "" \
+      3>&1 1>&2 2>&3) || return 0
 
     if [[ "$last" =~ ^[0-9]{1,3}$ ]] && (( last>=1 && last<=254 )); then
       target_ip="${base3}.${last}"
     else
-      whiptail --backtitle "ELF Debian13 ALL IN" --msgbox "最後一碼格式無效" 8 50
+      whiptail --backtitle "ELF Debian13 ALL IN" --title "錯誤" --msgbox "最後一碼格式無效" 8 50
       return 1
     fi
   else
     target_ip=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" \
-      --inputbox "找不到目前 IPv4，請輸入完整固定 IP (例如 192.168.25.50)" 10 70 "" \
-      3>&1 1>&2 2>&3) || return
+      --inputbox "找不到目前 IPv4，請輸入完整固定 IP (例如 192.168.25.50)" 10 75 "" \
+      3>&1 1>&2 2>&3) || return 0
   fi
 
   if [[ -n "${gateway:-}" ]]; then
-    if ! whiptail --backtitle "ELF Debian13 ALL IN" --title "Gateway" --yesno "偵測到目前 Gateway：${gateway}\n是否使用此設定？" 10 60; then
+    if ! whiptail --backtitle "ELF Debian13 ALL IN" --title "Gateway" \
+      --yesno "偵測到目前 Gateway：${gateway}\n\n是否使用此設定？" 12 70; then
       gateway=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Gateway" \
-        --inputbox "請輸入 Gateway (例如 192.168.25.254)" 10 70 "" \
-        3>&1 1>&2 2>&3) || return
+        --inputbox "請輸入 Gateway (例如 192.168.25.254)" 10 75 "" \
+        3>&1 1>&2 2>&3) || return 0
     fi
   else
     gateway=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Gateway" \
-      --inputbox "偵測不到 default gateway，請手動輸入 (例如 192.168.25.254)" 10 70 "" \
-      3>&1 1>&2 2>&3) || return
+      --inputbox "偵測不到 default gateway，請手動輸入 (例如 192.168.25.254)" 10 75 "" \
+      3>&1 1>&2 2>&3) || return 0
   fi
 
   local netmask
@@ -344,7 +379,7 @@ function configure_static_ip() {
   dns1="$(echo "$DNS_PRIMARY" | awk '{print $1}')"
   dns="${dns1}"
 
-  [[ -f /etc/network/interfaces ]] && cp /etc/network/interfaces /etc/network/interfaces.backup 2>/dev/null || true
+  [[ -f /etc/network/interfaces ]] && cp /etc/network/interfaces /etc/network/interfaces.backup >>"$LOG_FILE" 2>&1 || true
 
   local network_manager=""
   if systemctl is-active --quiet systemd-networkd 2>/dev/null; then
@@ -354,8 +389,6 @@ function configure_static_ip() {
   else
     network_manager="interfaces"
   fi
-
-  msg_info "套用固定 IP：$target_ip/$prefix  GW=$gateway  DNS=$dns  (manager=$network_manager)"
 
   case "$network_manager" in
     systemd-networkd)
@@ -369,8 +402,8 @@ Address=$target_ip/$prefix
 Gateway=$gateway
 DNS=$dns
 EOF
-      systemctl daemon-reload
-      systemctl restart systemd-networkd
+      systemctl daemon-reload >>"$LOG_FILE" 2>&1 || true
+      systemctl restart systemd-networkd >>"$LOG_FILE" 2>&1 || true
       ;;
     NetworkManager)
       mkdir -p /etc/NetworkManager/system-connections
@@ -389,8 +422,8 @@ dns=$dns;
 method=ignore
 EOF
       chmod 600 "/etc/NetworkManager/system-connections/${iface}.nmconnection"
-      nmcli connection reload
-      nmcli connection up "$iface" || true
+      nmcli connection reload >>"$LOG_FILE" 2>&1 || true
+      nmcli connection up "$iface" >>"$LOG_FILE" 2>&1 || true
       ;;
     interfaces|*)
       cat > /etc/network/interfaces <<EOF
@@ -405,24 +438,20 @@ iface $iface inet static
     dns-nameservers $dns
 EOF
       if systemctl is-active --quiet networking 2>/dev/null; then
-        systemctl restart networking || true
+        systemctl restart networking >>"$LOG_FILE" 2>&1 || true
       elif [ -f /etc/init.d/networking ]; then
-        /etc/init.d/networking restart || true
+        /etc/init.d/networking restart >>"$LOG_FILE" 2>&1 || true
       else
-        ip addr flush dev "$iface" || true
-        ip addr add "$target_ip/$prefix" dev "$iface" || true
-        ip route replace default via "$gateway" dev "$iface" || true
+        ip addr flush dev "$iface" >>"$LOG_FILE" 2>&1 || true
+        ip addr add "$target_ip/$prefix" dev "$iface" >>"$LOG_FILE" 2>&1 || true
+        ip route replace default via "$gateway" dev "$iface" >>"$LOG_FILE" 2>&1 || true
       fi
       ;;
   esac
-
-  sleep 2
-  msg_ok "✓ 固定 IP 設定完成（若連線中斷，請透過主控台/VM console 修復）"
 }
 
-# ========== 功能：大檔優化 ==========
-function optimize_for_large_files() {
-  msg_info "正在優化系統以處理大文件..."
+# ================= 功能：大檔 I/O 調優 =================
+optimize_for_large_files() {
   local f=/etc/sysctl.d/99-io-tuning.conf
   mkdir -p /etc/sysctl.d
   cat >"$f" <<'EOF'
@@ -430,22 +459,20 @@ vm.dirty_ratio = 5
 vm.dirty_background_ratio = 2
 vm.swappiness = 10
 EOF
-  sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
-  msg_ok "✓ 大文件處理優化完成"
+  sysctl --system >>"$LOG_FILE" 2>&1 || sysctl -p >>"$LOG_FILE" 2>&1 || true
 }
 
-# ========== 功能：擴展硬碟 ==========
-function expand_disk() {
-  msg_info "正在檢查硬碟空間..."
-  apt-get update -qq
-  apt-get install -y cloud-guest-utils lvm2 xfsprogs btrfs-progs bc
+# ================= 功能：擴展硬碟（含 LVM） =================
+expand_disk() {
+  install_package_if_needed cloud-guest-utils
+  install_package_if_needed lvm2
+  install_package_if_needed xfsprogs
+  install_package_if_needed btrfs-progs
+  install_package_if_needed bc
 
   local rootdev fstype
   rootdev=$(findmnt -no SOURCE /)
   fstype=$(findmnt -no FSTYPE /)
-
-  msg_info "根設備: $rootdev"
-  msg_info "文件系統: $fstype"
 
   local has_free_space=false
 
@@ -462,7 +489,6 @@ function expand_disk() {
     elif [[ "$rootdev" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
     fi
-
     if [ -n "${disk:-}" ]; then
       local disk_size part_size
       disk_size=$(lsblk -b -n -o SIZE "$disk" 2>/dev/null | head -1)
@@ -477,33 +503,26 @@ function expand_disk() {
   fi
 
   if [ "$has_free_space" = false ]; then
-    msg_ok "✓ 硬碟已經是最大容量，無需擴充"
-    df -h / || true
     return 0
   fi
-
-  msg_info "檢測到可用空間，正在擴展硬碟空間..."
 
   if [[ "$rootdev" =~ ^/dev/mapper/.+ ]]; then
     local lv pv disk part
     lv="$rootdev"
     pv=$(pvs --noheadings -o pv_name 2>/dev/null | awk 'NF{print $1; exit}')
-    [[ -n "${pv:-}" ]] || { msg_error "✗ 找不到 PV"; return 1; }
+    [[ -n "${pv:-}" ]] || return 1
 
     if [[ "$pv" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
     elif [[ "$pv" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
     else
-      msg_error "✗ 無法解析 PV: $pv"
       return 1
     fi
 
-    growpart "$disk" "$part" || { msg_error "✗ growpart 失敗"; return 1; }
-    pvresize "$pv" || { msg_error "✗ pvresize 失敗"; return 1; }
-    lvextend -r -l +100%FREE "$lv" || { msg_error "✗ lvextend 失敗"; return 1; }
-    df -h / || true
-    msg_ok "✓ LVM 擴展完成"
+    growpart "$disk" "$part" >>"$LOG_FILE" 2>&1
+    pvresize "$pv" >>"$LOG_FILE" 2>&1
+    lvextend -r -l +100%FREE "$lv" >>"$LOG_FILE" 2>&1
   else
     local disk part
     if [[ "$rootdev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
@@ -511,25 +530,21 @@ function expand_disk() {
     elif [[ "$rootdev" =~ ^(/dev/[a-zA-Z]+)([0-9]+)$ ]]; then
       disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
     else
-      msg_error "✗ 不支援的根設備: $rootdev"
       return 1
     fi
 
-    growpart "$disk" "$part" || { msg_error "✗ growpart 失敗"; return 1; }
+    growpart "$disk" "$part" >>"$LOG_FILE" 2>&1
     case "$fstype" in
-      ext2|ext3|ext4) resize2fs "$rootdev" ;;
-      xfs) xfs_growfs -d / ;;
-      btrfs) btrfs filesystem resize max / ;;
-      *) msg_error "✗ 不支援的文件系統: $fstype"; return 1 ;;
+      ext2|ext3|ext4) resize2fs "$rootdev" >>"$LOG_FILE" 2>&1 ;;
+      xfs) xfs_growfs -d / >>"$LOG_FILE" 2>&1 ;;
+      btrfs) btrfs filesystem resize max / >>"$LOG_FILE" 2>&1 ;;
+      *) return 1 ;;
     esac
-    df -h / || true
-    msg_ok "✓ 擴展完成"
   fi
 }
 
-# ========== 功能：網路傳輸優化 ==========
-function optimize_network_stack() {
-  msg_info "正在優化網路傳輸參數..."
+# ================= 功能：網路傳輸優化 =================
+optimize_network_stack() {
   local f=/etc/sysctl.d/99-net-opt.conf
   mkdir -p /etc/sysctl.d
 
@@ -556,31 +571,26 @@ net.ipv4.tcp_wmem = 4096 1048576 67108864
 net.ipv4.ip_forward = 1
 EOF
 
-  sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
+  sysctl --system >>"$LOG_FILE" 2>&1 || sysctl -p >>"$LOG_FILE" 2>&1 || true
 
   local iface
   iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
   if [ -n "${iface:-}" ]; then
-    apt-get update -qq
-    apt-get install -y ethtool
-    ip link set dev "$iface" txqueuelen 10000 2>/dev/null || true
-    ethtool -K "$iface" gro on gso on tso on >/dev/null 2>&1 || true
-    ethtool -G "$iface" rx 4096 tx 4096 >/dev/null 2>&1 || true
+    install_package_if_needed ethtool
+    ip link set dev "$iface" txqueuelen 10000 >>"$LOG_FILE" 2>&1 || true
+    ethtool -K "$iface" gro on gso on tso on >>"$LOG_FILE" 2>&1 || true
+    ethtool -G "$iface" rx 4096 tx 4096 >>"$LOG_FILE" 2>&1 || true
   fi
-  msg_ok "✓ 網路優化完成"
 }
 
-# ========== 功能：guest agent ==========
-function install_guest_agent() {
-  msg_info "安裝 qemu-guest-agent..."
+# ================= 功能：qemu-guest-agent =================
+install_guest_agent() {
   install_package_if_needed qemu-guest-agent
-  systemctl enable --now qemu-guest-agent >/dev/null 2>&1 || true
-  msg_ok "qemu-guest-agent 安裝完成"
+  systemctl enable --now qemu-guest-agent >>"$LOG_FILE" 2>&1 || true
 }
 
-# ========== 功能：docker ==========
-function install_docker_stack() {
-  msg_info "安裝 Docker 引擎與 Compose..."
+# ================= 功能：Docker / Compose =================
+install_docker_stack() {
   install_package_if_needed apt-transport-https
   install_package_if_needed ca-certificates
   install_package_if_needed curl
@@ -588,19 +598,20 @@ function install_docker_stack() {
   install_package_if_needed lsb-release
 
   mkdir -p /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg >>"$LOG_FILE" 2>&1 || true
+
   echo \
 "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
 $(lsb_release -cs) stable" >/etc/apt/sources.list.d/docker.list
 
-  apt-get update -qq
-  apt-get install -y docker-ce docker-ce-cli containerd.io
+  apt-get update -qq >>"$LOG_FILE" 2>&1 || true
+  apt-get install -y docker-ce docker-ce-cli containerd.io >>"$LOG_FILE" 2>&1
 
-  curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" \
+    -o /usr/local/bin/docker-compose >>"$LOG_FILE" 2>&1
   chmod +x /usr/local/bin/docker-compose
 
-  systemctl enable --now docker >/dev/null 2>&1 || true
-  msg_ok "Docker 與 Compose 安裝完成"
+  systemctl enable --now docker >>"$LOG_FILE" 2>&1 || true
 
   local mem_kb mem_g docker_mem_g final_mem final_cpu
   mem_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
@@ -617,16 +628,16 @@ MemoryMax=${final_mem}
 CPUQuota=${final_cpu}
 EOF
 
-  systemctl daemon-reload >/dev/null 2>&1 || true
-  systemctl restart docker >/dev/null 2>&1 || true
-  msg_ok "Docker 資源額度已套用：MemoryMax=${final_mem}, CPUQuota=${final_cpu}"
+  systemctl daemon-reload >>"$LOG_FILE" 2>&1 || true
+  systemctl restart docker >>"$LOG_FILE" 2>&1 || true
 }
 
-# ========== Log 清理排程 ==========
-function cleanup_log_cron() {
-  rm -f /usr/local/sbin/elf-log-cleanup.sh /etc/cron.d/elf-log-cleanup
+# ================= 功能：Log 清理排程 =================
+cleanup_log_cron() {
+  rm -f /usr/local/sbin/elf-log-cleanup.sh /etc/cron.d/elf-log-cleanup >>"$LOG_FILE" 2>&1 || true
 }
-function schedule_log_cleanup() {
+
+schedule_log_cleanup() {
   local choice
   choice=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "LOG MAINTENANCE" --menu "選擇 log 清理排程" 12 60 5 \
     "monthly" "每月一次" \
@@ -637,8 +648,7 @@ function schedule_log_cleanup() {
 
   if [ "$choice" = "disable" ]; then
     cleanup_log_cron
-    msg_ok "已停用 log 清理排程"
-    return
+    return 0
   fi
 
   cat >/usr/local/sbin/elf-log-cleanup.sh <<'EOF'
@@ -662,18 +672,17 @@ EOF
   cat >/etc/cron.d/elf-log-cleanup <<EOF
 $cron_expr root /usr/local/sbin/elf-log-cleanup.sh
 EOF
-  msg_ok "已設定 $choice 排程"
 }
 
-# ========== 持久化性能調優 ==========
-function disable_thp_runtime_only() {
+# ================= 功能：持久化性能調優（核心） =================
+disable_thp_runtime_only() {
   local base="/sys/kernel/mm/transparent_hugepage"
   [[ -d "$base" ]] || return 0
   echo never > "$base/enabled" 2>/dev/null || true
   echo never > "$base/defrag"  2>/dev/null || true
 }
 
-function grub_add_param_once() {
+grub_add_param_once() {
   local key="$1"
   local param="$2"
   [[ -f "$GRUB_FILE" ]] || return 0
@@ -685,32 +694,36 @@ function grub_add_param_once() {
   sed -i -E "s|^${key}=.*|${key}=\"${updated}\"|" "$GRUB_FILE"
 }
 
-function set_cpu_governor_performance() {
+set_cpu_governor_performance() {
   install_package_if_needed cpufrequtils
   for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
     [[ -e "$f" ]] || continue
     echo performance > "$f" 2>/dev/null || true
   done
   write_file_if_changed /etc/default/cpufrequtils 'GOVERNOR="performance"'
-  systemctl enable --now cpufrequtils >/dev/null 2>&1 || true
+  systemctl enable --now cpufrequtils >>"$LOG_FILE" 2>&1 || true
 }
 
-function enable_irqbalance_service() {
+enable_irqbalance_service() {
   install_package_if_needed irqbalance
-  systemctl enable --now irqbalance >/dev/null 2>&1 || true
+  systemctl enable --now irqbalance >>"$LOG_FILE" 2>&1 || true
 }
 
-function apply_sysctl_baseline() {
+apply_sysctl_baseline() {
   write_file_if_changed "$SYSCTL_TUNE_FILE" "$SYSCTL_TUNE_CONTENT"
-  sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
+  sysctl --system >>"$LOG_FILE" 2>&1 || sysctl -p >>"$LOG_FILE" 2>&1 || true
 }
 
-function ensure_systemd_resolved_dns() {
+ensure_systemd_resolved_dns() {
+  # 如果有 systemd-resolved，就用 resolved.conf；否則直接寫 /etc/resolv.conf
   if systemctl list-unit-files 2>/dev/null | grep -q '^systemd-resolved\.service'; then
+    # Debian 可能未啟用 resolved，但 package 通常存在；這裡保守：安裝需要時才安裝
     install_package_if_needed systemd-resolved
+
     local f="/etc/systemd/resolved.conf"
     [[ -f "$f" ]] || touch "$f"
     backup_file_ts "$f"
+
     grep -qE '^\s*\[Resolve\]\s*$' "$f" || printf '\n[Resolve]\n' >> "$f"
 
     if grep -qE '^\s*#?\s*DNS=' "$f"; then
@@ -725,10 +738,15 @@ function ensure_systemd_resolved_dns() {
       awk -v fdns="FallbackDNS=${DNS_FALLBACK}" '{print} /^\[Resolve\]/{print fdns}' "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
     fi
 
-    systemctl enable --now systemd-resolved >/dev/null 2>&1 || true
-    systemctl restart systemd-resolved >/dev/null 2>&1 || true
-    [[ -e /run/systemd/resolve/stub-resolv.conf ]] && ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf || true
-    [[ -e /run/systemd/resolve/resolv.conf ]]      && ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf || true
+    systemctl enable --now systemd-resolved >>"$LOG_FILE" 2>&1 || true
+    systemctl restart systemd-resolved >>"$LOG_FILE" 2>&1 || true
+
+    # Debian 的 resolv.conf 常見是 stub-resolv.conf
+    if [[ -e /run/systemd/resolve/stub-resolv.conf ]]; then
+      ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    elif [[ -e /run/systemd/resolve/resolv.conf ]]; then
+      ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+    fi
   else
     backup_file_ts /etc/resolv.conf || true
     {
@@ -738,7 +756,7 @@ function ensure_systemd_resolved_dns() {
   fi
 }
 
-function install_io_tune_boot_service() {
+install_io_tune_boot_service() {
   cat > "$IO_TUNE_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -806,100 +824,157 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload >/dev/null 2>&1 || true
-  systemctl enable --now elf-io-tune.service >/dev/null 2>&1 || true
+  systemctl daemon-reload >>"$LOG_FILE" 2>&1 || true
+  systemctl enable --now elf-io-tune.service >>"$LOG_FILE" 2>&1 || true
 }
 
-function enable_fstrim_timer() {
-  systemctl enable --now fstrim.timer >/dev/null 2>&1 || true
+enable_fstrim_timer() {
+  systemctl enable --now fstrim.timer >>"$LOG_FILE" 2>&1 || true
 }
 
-function disable_fixed_services_except_mysql() {
+disable_fixed_services_except_mysql() {
   for s in "${SERVICES_TO_DISABLE[@]}"; do
-    systemctl disable --now "$s" >/dev/null 2>&1 || true
+    systemctl disable --now "$s" >>"$LOG_FILE" 2>&1 || true
   done
 }
 
-function apply_persistent_tuning_all() {
-  msg_info "開始套用：持久化性能調優（含 DNS + 固定停用服務/mysql除外）..."
-  apt-get update -qq
-  apt-get install -y cpufrequtils irqbalance
-
+apply_persistent_tuning_all() {
+  # 1) CPU governor
   set_cpu_governor_performance
+
+  # 2) irqbalance
   enable_irqbalance_service
+
+  # 3) sysctl baseline
   apply_sysctl_baseline
 
+  # 4) THP：runtime + grub
+  disable_thp_runtime_only
   if [[ -f "$GRUB_FILE" ]]; then
     backup_file_ts "$GRUB_FILE"
-    disable_thp_runtime_only
     grub_add_param_once "GRUB_CMDLINE_LINUX_DEFAULT" "transparent_hugepage=never"
-    command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1 || true
-  else
-    disable_thp_runtime_only
+    command -v update-grub >/dev/null 2>&1 && update-grub >>"$LOG_FILE" 2>&1 || true
   fi
 
+  # 5) I/O tuning service (boot apply)
   install_io_tune_boot_service
-  enable_fstrim_timer
-  ensure_systemd_resolved_dns
-  disable_fixed_services_except_mysql
 
-  msg_ok "✓ 持久化調優完成（建議重啟一次讓 GRUB/THP 完整生效）"
+  # 6) fstrim
+  enable_fstrim_timer
+
+  # 7) DNS（你要求一定要做）
+  ensure_systemd_resolved_dns
+
+  # 8) disable services (mysql 제외)
+  disable_fixed_services_except_mysql
 }
 
-# ========== Checklist UI ==========
-function select_tasks() {
-  local opts=()
-
-  # 預設策略：已設定 -> OFF；未設定 -> ON（避免重跑一直重做）
+# ================= Checklist UI =================
+select_tasks() {
   local guest_status="ON"; systemctl is-enabled qemu-guest-agent >/dev/null 2>&1 && guest_status="OFF"
   local ssh_status="ON";  is_ssh_configured_root_pw_login && ssh_status="OFF"
   local ip_status="ON";   is_static_ip_configured_any && ip_status="OFF"
   local tune_status="ON"; is_persistent_tuning_applied && tune_status="OFF"
   local net_status="ON";  is_net_opt_tuned && net_status="OFF"
   local lf_status="ON";   is_largefile_tuned && lf_status="OFF"
+  local log_status="ON";  [[ -f /etc/cron.d/elf-log-cleanup ]] && log_status="OFF"
 
-  opts+=("tune"   "持久化性能調優 + DNS + 停用服務(mysql除外)" "$tune_status")
-  opts+=("ipdns"  "固定 IP / DNS（取當下 gateway/prefix；可只輸入最後一碼）" "$ip_status")
-  opts+=("ssh"    "SSH（允許 root 密碼登入）" "$ssh_status")
-  opts+=("guest"  "qemu-guest-agent" "$guest_status")
-  opts+=("rootpw" "設定 root 密碼" "OFF")
-  opts+=("docker" "Docker / Compose" "OFF")
-  opts+=("large"  "大文件 I/O 優化（dirty_ratio 等）" "$lf_status")
-  opts+=("expand" "擴展硬碟（含 LVM）" "OFF")
-  opts+=("net"    "網路傳輸優化（BBR/fq 等）" "$net_status")
-  opts+=("log"    "Log 定期清理排程" "OFF")
+  local opts=(
+    "tune"   "持久化性能調優 + DNS + 停用服務(mysql除外)" "$tune_status"
+    "ipdns"  "固定 IP / DNS（取當下 gateway/prefix；可只輸入最後一碼）" "$ip_status"
+    "ssh"    "SSH（允許 root 密碼登入）" "$ssh_status"
+    "guest"  "qemu-guest-agent" "$guest_status"
+    "rootpw" "設定 root 密碼" "OFF"
+    "docker" "Docker / Compose" "OFF"
+    "large"  "大文件 I/O 優化（dirty_ratio 等）" "$lf_status"
+    "expand" "擴展硬碟（含 LVM）" "OFF"
+    "net"    "網路傳輸優化（BBR/fq 等）" "$net_status"
+    "log"    "Log 定期清理排程" "$log_status"
+  )
 
   whiptail --backtitle "ELF Debian13 ALL IN" \
     --title "選擇要執行的項目（空白鍵勾選；Enter 執行）" \
-    --checklist "勾選 = 執行；不勾選 = 跳過" 22 90 12 \
+    --checklist "勾選 = 執行；不勾選 = 跳過" 22 92 12 \
     "${opts[@]}" 3>&1 1>&2 2>&3
 }
 
-function run_selected_tasks() {
+run_selected_tasks() {
   local chosen="$1"
 
-  [[ "$chosen" == *"tune"*   ]] && apply_persistent_tuning_all
-  [[ "$chosen" == *"ipdns"*  ]] && configure_static_ip
-  [[ "$chosen" == *"ssh"*    ]] && configure_ssh
-  [[ "$chosen" == *"guest"*  ]] && install_guest_agent
-  [[ "$chosen" == *"rootpw"* ]] && set_root_password
-  [[ "$chosen" == *"docker"* ]] && install_docker_stack
-  [[ "$chosen" == *"large"*  ]] && optimize_for_large_files
-  [[ "$chosen" == *"expand"* ]] && expand_disk
-  [[ "$chosen" == *"net"*    ]] && optimize_network_stack
-  [[ "$chosen" == *"log"*    ]] && schedule_log_cleanup
+  selected "$chosen" "tune"   && run_one "tune"   "持久化性能調優 + DNS + 停用服務(mysql除外)" apply_persistent_tuning_all
+  selected "$chosen" "ipdns"  && run_one "ipdns"  "固定 IP / DNS（取當下 gateway/prefix）"       configure_static_ip
+  selected "$chosen" "ssh"    && run_one "ssh"    "SSH（允許 root 密碼登入）"                    configure_ssh
+  selected "$chosen" "guest"  && run_one "guest"  "qemu-guest-agent"                             install_guest_agent
+  selected "$chosen" "rootpw" && run_one "rootpw" "設定 root 密碼"                                set_root_password
+  selected "$chosen" "docker" && run_one "docker" "Docker / Compose"                              install_docker_stack
+  selected "$chosen" "large"  && run_one "large"  "大文件 I/O 優化"                                optimize_for_large_files
+  selected "$chosen" "expand" && run_one "expand" "擴展硬碟（含 LVM）"                             expand_disk
+  selected "$chosen" "net"    && run_one "net"    "網路傳輸優化（BBR/fq 等）"                      optimize_network_stack
+  selected "$chosen" "log"    && run_one "log"    "Log 定期清理排程"                               schedule_log_cleanup
 }
 
-# ========== Main ==========
-chosen="$(select_tasks)" || exit 0
+# ================= Main =================
+header_info
+ensure_log
+log_block "SCRIPT START"
 
-# 顯示摘要確認
-if ! whiptail --backtitle "ELF Debian13 ALL IN" --title "確認" \
-  --yesno "即將執行以下項目：\n\n$chosen\n\n確定開始？" 14 70; then
-  exit 0
+# root 檢查
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  echo "請以 root 身份運行此腳本"
+  exit 1
 fi
+
+# TTY 檢查（沒有 TTY，whiptail 很容易「看似跳出」）
+if ! [ -t 0 ] || ! [ -t 1 ]; then
+  echo "[ERROR] 偵測到非互動式環境（沒有 TTY），無法顯示 UI。"
+  echo "請用：sudo -i ; bash script.sh"
+  echo "或 SSH：ssh -t user@host 'sudo -i bash script.sh'"
+  exit 1
+fi
+
+# whiptail 檢查
+if ! command -v whiptail >/dev/null 2>&1; then
+  echo "[ERROR] 缺少 whiptail。請先執行：apt-get update && apt-get install -y whiptail"
+  exit 1
+fi
+
+# 等待 systemd ready（接受 running 或 degraded）
+echo "等待系統初始化完成..."
+for i in {1..30}; do
+  st="$(systemctl is-system-running 2>/dev/null || true)"
+  if [[ "$st" = "running" || "$st" = "degraded" ]]; then
+    echo "系統已準備就緒（$st）"
+    break
+  fi
+  echo -n "."
+  sleep 2
+done
+echo ""
+
+# Checklist + 可返回重選
+while true; do
+  if ! chosen="$(select_tasks)"; then
+    # Cancel/ESC：正常退出
+    log_block "USER CANCELLED"
+    exit 0
+  fi
+
+  if [[ -z "${chosen// }" ]]; then
+    whiptail --backtitle "ELF Debian13 ALL IN" --title "提示" \
+      --msgbox "你沒有勾選任何項目。\n\n請至少勾選一個項目，或按 Cancel 離開。" 10 60
+    continue
+  fi
+
+  if whiptail --backtitle "ELF Debian13 ALL IN" --title "確認" \
+    --yesno "即將執行以下項目：\n\n$chosen\n\n確定開始？\n\n選 No 可返回重新勾選。" 16 84; then
+    break
+  fi
+done
 
 run_selected_tasks "$chosen"
 
 whiptail --backtitle "ELF Debian13 ALL IN" --title "完成" --msgbox \
-"已完成你勾選的項目。\n\n若有套用持久化調優（GRUB/THP），建議重啟一次讓設定完整生效。" 10 70
+"已完成你勾選的項目。\n\nLog：${LOG_FILE}\n\n若你有套用：持久化調優（GRUB/THP），建議重啟一次讓設定完整生效。" 12 78
+
+log_block "SCRIPT END"
+exit 0
