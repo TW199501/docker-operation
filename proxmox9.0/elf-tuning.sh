@@ -216,10 +216,18 @@ function ask_run() {
 
   if [[ "$already" = "1" ]]; then
     # 預設 NO
-    whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --defaultno --yesno "$prompt\n\n偵測到：已設定。\n是否仍要重新執行？" 14 70
+    if whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --defaultno --yesno "$prompt\n\n偵測到：已設定。\n是否仍要重新執行？" 14 70; then
+      return 0  # YES 返回成功
+    else
+      return 1  # NO 返回失敗
+    fi
   else
     # 預設 YES
-    whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --yesno "$prompt\n\n偵測到：尚未設定。\n是否現在執行？" 14 70
+    if whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --yesno "$prompt\n\n偵測到：尚未設定。\n是否現在執行？" 14 70; then
+      return 0  # YES 返回成功
+    else
+      return 1  # NO 返回失敗
+    fi
   fi
 }
 
@@ -832,7 +840,9 @@ function enable_fstrim_timer() {
 }
 function disable_fixed_services_except_mysql() {
   for s in "${SERVICES_TO_DISABLE[@]}"; do
-    systemctl disable --now "$s" >/dev/null 2>&1 || true
+    if systemctl list-unit-files "$s.service" >/dev/null 2>&1; then
+      systemctl disable --now "$s" >/dev/null 2>&1 || true
+    fi
   done
 }
 function apply_persistent_tuning_all() {
