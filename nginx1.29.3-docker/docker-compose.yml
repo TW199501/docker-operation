@@ -12,6 +12,7 @@ services:
       - /var/log/nginx:/var/log/nginx
       - /var/cache/nginx:/var/cache/nginx
       - /usr/share/GeoIP:/usr/share/GeoIP
+      - /usr/share/modsecurity-crs:/usr/share/modsecurity-crs
       - /opt/stacks/haprox/keepalived:/opt/keepalived
     networks:
       - elf-internal
