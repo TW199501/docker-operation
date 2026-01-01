@@ -1,0 +1,31 @@
+{
+  "ext": ".csv",
+  "encode":"Shift_JIS",
+  "dataRowStartIndex": 2,
+  "maxcolumn": 5,
+  "columns": [
+    {
+      "column": "交易日期",
+      "filecolumnIndex": 1
+    },
+    {
+      "column": "描述",
+      "filecolumnIndex": 2
+    },
+    {
+      "column": "金額",
+      "filecolumnIndex": 3,
+      "pn": -1
+    },
+    {
+      "column": "金額",
+      "filecolumnIndex": 4,
+      "typeerrorcolumn": "收付款資訊",
+      "pn": 1
+    },
+    {
+      "column": "結餘",
+      "filecolumnIndex": 5
+    }
+  ]
+}
