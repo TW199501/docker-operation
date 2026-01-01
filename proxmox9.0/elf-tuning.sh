@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 # Debian 13 VM 工具腳本（融合版 + 每個功能可選/自動判斷是否已設定 + gateway/網段自動取當下網路）
-#
-# 特色改動：
-# - 每個功能都會先「偵測是否已設定」，若已設定則預設選 NO（避免你跑第二次還重做）
-# - 固定 IP：自動取「當下介面 / 當下 gateway / 當下 prefix」，可只輸入最後一碼（有現有 IP 時）
-# - DNS：固定 IP 步驟的 DNS 預設取本腳本 DNS_PRIMARY 第一個
-# - 新增持久化性能調優（含固定停用服務 mysql 除外）同樣有「已設定偵測」
+# 修正版：修正 YES/NO 反轉、持久化調優錯誤、避免 NO 也看到安裝造成誤解
 
 if [ -z "${BASH_VERSION:-}" ]; then
   exec bash "$0" "$@"
@@ -77,7 +72,7 @@ function header_info {
    | |____| |____ | |__| (_| | (__| |__| |  __| | (__| |_| | | | | |____ >  <| | |
    |______|______||______\__,_|\___|_____/ \___|_|\___|\__|_| |_| |______/_/\_\|_| |
 
-              ELF Debian13 All-IN Tools + Persistent Tuning (open-source)
+              ELF Debian13 All-IN Tools + Persistent Tuning (fixed)
 EOF
 }
 
@@ -88,6 +83,13 @@ echo -e "\n Loading...\n"
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   echo "請以 root 身份運行此腳本"
   echo "使用 sudo 或切換到 root 用戶"
+  exit 1
+fi
+
+# ---- whiptail 檢查：避免 NO 也看到自動安裝造成誤解 ----
+if ! command -v whiptail >/dev/null 2>&1; then
+  echo "[ERROR] 系統缺少 whiptail。請先手動安裝一次："
+  echo "  apt-get update && apt-get install -y whiptail"
   exit 1
 fi
 
@@ -125,21 +127,18 @@ function install_package_if_needed() {
   fi
 }
 
-install_package_if_needed whiptail
-
 function backup_file_ts() {
   local f="$1"
-  if [ -f "$f" ]; then
-    local ts
-    ts="$(date +%Y%m%d_%H%M%S)"
-    cp -a "$f" "${f}.bak.${ts}"
-  fi
+  [[ -e "$f" ]] || return 0
+  local ts
+  ts="$(date +%Y%m%d_%H%M%S)"
+  cp -a "$f" "${f}.bak.${ts}"
 }
 
 function write_file_if_changed() {
   local path="$1"
   local content="$2"
-  if [ -e "$path" ]; then
+  if [[ -e "$path" ]]; then
     if diff -q <(printf '%s\n' "$content") "$path" >/dev/null 2>&1; then
       return 0
     fi
@@ -166,18 +165,15 @@ function is_ssh_configured_root_pw_login() {
 }
 
 function is_static_ip_configured_any() {
-  # 只做「是否已有靜態設定檔」判斷：避免誤判 DHCP
   local iface
   iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')"
   iface="${iface:-eth0}"
 
-  if [[ -f "/etc/systemd/network/10-${iface}.network" ]]; then return 0; fi
+  [[ -f "/etc/systemd/network/10-${iface}.network" ]] && return 0
   if [[ -d /etc/NetworkManager/system-connections ]] && ls /etc/NetworkManager/system-connections/*.nmconnection >/dev/null 2>&1; then
-    if grep -Rqs "interface-name=${iface}" /etc/NetworkManager/system-connections 2>/dev/null; then
-      return 0
-    fi
+    grep -Rqs "interface-name=${iface}" /etc/NetworkManager/system-connections 2>/dev/null && return 0 || true
   fi
-  if [[ -f /etc/network/interfaces ]] && grep -Eq "iface\s+${iface}\s+inet\s+static" /etc/network/interfaces 2>/dev/null; then return 0; fi
+  [[ -f /etc/network/interfaces ]] && grep -Eq "iface\s+${iface}\s+inet\s+static" /etc/network/interfaces 2>/dev/null && return 0
   return 1
 }
 
@@ -201,9 +197,7 @@ function is_persistent_tuning_applied() {
   systemctl is-enabled irqbalance >/dev/null 2>&1 || return 1
   systemctl is-enabled fstrim.timer >/dev/null 2>&1 || return 1
   systemctl is-enabled elf-io-tune.service >/dev/null 2>&1 || return 1
-  # THP grub param
   [[ -f "$GRUB_FILE" ]] && grep -q "transparent_hugepage=never" "$GRUB_FILE" || return 1
-  # DNS resolved (若存在)
   if systemctl list-unit-files 2>/dev/null | grep -q '^systemd-resolved\.service'; then
     [[ -f /etc/systemd/resolved.conf ]] || return 1
     grep -q '^DNS=' /etc/systemd/resolved.conf 2>/dev/null || return 1
@@ -211,27 +205,28 @@ function is_persistent_tuning_applied() {
   return 0
 }
 
-# 統一問答：若已設定，預設 NO；未設定，預設 YES
+# ====== 修正重點：ask_run 可靠回傳 YES/NO（避免 NO/YES 反轉）======
 function ask_run() {
   local title="$1"
   local prompt="$2"
   local already="$3"  # 0=未設定 1=已設定
+  local rc
 
+  set +e
   if [[ "$already" = "1" ]]; then
-    # 預設 NO
-    if whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --defaultno --yesno "$prompt\n\n偵測到：已設定。\n是否仍要重新執行？" 14 70; then
-      return 0  # YES 返回成功
-    else
-      return 1  # NO 返回失敗
-    fi
+    whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --defaultno \
+      --yesno "$prompt\n\n偵測到：已設定。\n是否仍要重新執行？" 14 70
+    rc=$?
   else
-    # 預設 YES
-    if whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" --yesno "$prompt\n\n偵測到：尚未設定。\n是否現在執行？" 14 70; then
-      return 0  # YES 返回成功
-    else
-      return 1  # NO 返回失敗
-    fi
+    whiptail --backtitle "ELF Debian13 ALL IN" --title "$title" \
+      --yesno "$prompt\n\n偵測到：尚未設定。\n是否現在執行？" 14 70
+    rc=$?
   fi
+  set -e
+
+  # YES=0；NO=1；ESC=255（全部當 NO）
+  [[ "$rc" -eq 0 ]] && return 0
+  return 1
 }
 
 # ========== 功能：root 密碼 ==========
@@ -255,7 +250,8 @@ function set_root_password() {
 # ========== 功能：SSH ==========
 function configure_ssh() {
   msg_info "正在配置 SSH..."
-  apt update && apt install -y openssh-client openssh-server
+  apt-get update -qq
+  apt-get install -y openssh-client openssh-server
 
   sed -i \
     -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' \
@@ -281,10 +277,7 @@ function disable_ipv6() {
     else
       echo 'GRUB_CMDLINE_LINUX="ipv6.disable=1"' >> "$GRUB_FILE"
     fi
-
-    if command -v update-grub >/dev/null 2>&1; then
-      update-grub >/dev/null 2>&1 || true
-    fi
+    command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1 || true
     msg_ok "✓ IPv6 功能已禁用（重啟後完全生效）"
   else
     msg_warning "⚠️ 找不到 GRUB 設定檔，僅停用 IPv6(runtime)"
@@ -312,7 +305,6 @@ function prefix2netmask() {
 
 # ========== 功能：固定 IP（gateway/網段取當下） ==========
 function configure_static_ip() {
-  # 是否同時禁用 IPv6
   local already_ipv6=0
   local disable_ipv6_selected=0
   is_ipv6_disabled && already_ipv6=1
@@ -328,11 +320,10 @@ function configure_static_ip() {
   current_cidr="$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet /{print $2; exit}')"
   current_ip="${current_cidr%%/*}"
   prefix="${current_cidr##*/}"
-  [[ "$current_cidr" = "$current_ip" ]] && prefix="24"  # fallback
+  [[ "$current_cidr" = "$current_ip" ]] && prefix="24"
 
   gateway="$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')"
 
-  # 只輸入最後一碼：有 current_ip 時才走這路徑
   local target_ip=""
   if [[ -n "${current_ip:-}" ]]; then
     local base3 last
@@ -348,13 +339,11 @@ function configure_static_ip() {
       return 1
     fi
   else
-    # 無 current_ip 時，讓你輸入完整 IP
     target_ip=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "固定 IP" \
       --inputbox "找不到目前 IPv4，請輸入完整固定 IP (例如 192.168.25.50)" 10 70 "" \
       3>&1 1>&2 2>&3) || return
   fi
 
-  # gateway：優先用當下偵測到的 default gateway
   if [[ -n "${gateway:-}" ]]; then
     if ! whiptail --backtitle "ELF Debian13 ALL IN" --title "Gateway" --yesno "偵測到目前 Gateway：${gateway}\n是否使用此設定？" 10 60; then
       gateway=$(whiptail --backtitle "ELF Debian13 ALL IN" --title "Gateway" \
@@ -367,23 +356,15 @@ function configure_static_ip() {
       3>&1 1>&2 2>&3) || return
   fi
 
-  # prefix/netmask：用當下 prefix；interfaces 需要 netmask
   local netmask
   netmask="$(prefix2netmask "$prefix")"
 
-  # DNS：固定 IP 步驟預設用 DNS_PRIMARY 第一個
-  local dns1
+  local dns1 dns
   dns1="$(echo "$DNS_PRIMARY" | awk '{print $1}')"
-  local dns="${dns1}"
+  dns="${dns1}"
 
-  # 備份
-  if [ -f /etc/network/interfaces ]; then
-    if [ -f /etc/network/interfaces ]; then
-      cp /etc/network/interfaces /etc/network/interfaces.backup 2>/dev/null || true
-    fi
-  fi
+  [[ -f /etc/network/interfaces ]] && cp /etc/network/interfaces /etc/network/interfaces.backup 2>/dev/null || true
 
-  # 判斷 network manager
   local network_manager=""
   if systemctl is-active --quiet systemd-networkd 2>/dev/null; then
     network_manager="systemd-networkd"
@@ -474,10 +455,11 @@ EOF
   msg_ok "✓ 大文件處理優化完成"
 }
 
-# ========== 功能：擴展硬碟（保持原邏輯） ==========
+# ========== 功能：擴展硬碟 ==========
 function expand_disk() {
   msg_info "正在檢查硬碟空間..."
-  apt update && apt install -y cloud-guest-utils lvm2 xfsprogs btrfs-progs bc
+  apt-get update -qq
+  apt-get install -y cloud-guest-utils lvm2 xfsprogs btrfs-progs bc
 
   local rootdev fstype
   rootdev=$(findmnt -no SOURCE /)
@@ -600,7 +582,8 @@ EOF
   local iface
   iface=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
   if [ -n "${iface:-}" ]; then
-    apt install -y ethtool >/dev/null 2>&1 || true
+    apt-get update -qq
+    apt-get install -y ethtool
     ip link set dev "$iface" txqueuelen 10000 2>/dev/null || true
     ethtool -K "$iface" gro on gso on tso on >/dev/null 2>&1 || true
     ethtool -G "$iface" rx 4096 tx 4096 >/dev/null 2>&1 || true
@@ -616,7 +599,7 @@ function install_guest_agent() {
   msg_ok "qemu-guest-agent 安裝完成"
 }
 
-# ========== 功能：docker（保持原邏輯） ==========
+# ========== 功能：docker ==========
 function install_docker_stack() {
   msg_info "安裝 Docker 引擎與 Compose..."
   install_package_if_needed apt-transport-https
@@ -703,17 +686,19 @@ EOF
   msg_ok "已設定 $choice 排程"
 }
 
-# ========== 【新增】持久化性能調優（含固定停用服務/mysql除外 + DNS） ==========
+# ========== 持久化性能調優（修正版） ==========
 function disable_thp_runtime_only() {
   local base="/sys/kernel/mm/transparent_hugepage"
   [[ -d "$base" ]] || return 0
   echo never > "$base/enabled" 2>/dev/null || true
   echo never > "$base/defrag"  2>/dev/null || true
 }
+
 function grub_add_param_once() {
   local key="$1"
   local param="$2"
   [[ -f "$GRUB_FILE" ]] || return 0
+
   grep -qE "^${key}=" "$GRUB_FILE" || echo "${key}=\"\"" >> "$GRUB_FILE"
   local current updated
   current="$(grep -E "^${key}=" "$GRUB_FILE" | head -n1 | sed -E 's/^'"$key"'="(.*)".*/\1/')"
@@ -721,8 +706,9 @@ function grub_add_param_once() {
   updated="$(echo "$current $param" | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ //; s/ $//')"
   sed -i -E "s|^${key}=.*|${key}=\"${updated}\"|" "$GRUB_FILE"
 }
+
 function set_cpu_governor_performance() {
-  install_package_if_needed cpufrequtils
+  # 這裡不再重複安裝，改由 apply_persistent_tuning_all 統一安裝
   for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
     [[ -e "$f" ]] || continue
     echo performance > "$f" 2>/dev/null || true
@@ -730,21 +716,23 @@ function set_cpu_governor_performance() {
   write_file_if_changed /etc/default/cpufrequtils 'GOVERNOR="performance"'
   systemctl enable --now cpufrequtils >/dev/null 2>&1 || true
 }
+
 function enable_irqbalance_service() {
-  install_package_if_needed irqbalance
   systemctl enable --now irqbalance >/dev/null 2>&1 || true
 }
+
 function apply_sysctl_baseline() {
   write_file_if_changed "$SYSCTL_TUNE_FILE" "$SYSCTL_TUNE_CONTENT"
   sysctl --system >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
 }
-function ensure_systemd_resolved_dns() {
-  local dns1
-  dns1="$(echo "$DNS_PRIMARY" | awk '{print $1}')"
 
+function ensure_systemd_resolved_dns() {
+  local f="/etc/systemd/resolved.conf"
+
+  # 若系統有 systemd-resolved unit，優先用它；否則退回寫 /etc/resolv.conf
   if systemctl list-unit-files 2>/dev/null | grep -q '^systemd-resolved\.service'; then
-    install_package_if_needed systemd-resolved || true
-    local f="/etc/systemd/resolved.conf"
+    install_package_if_needed systemd-resolved
+
     [[ -f "$f" ]] || touch "$f"
     backup_file_ts "$f"
 
@@ -755,6 +743,7 @@ function ensure_systemd_resolved_dns() {
     else
       awk -v dns="DNS=${DNS_PRIMARY}" '{print} /^\[Resolve\]/{print dns}' "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
     fi
+
     if grep -qE '^\s*#?\s*FallbackDNS=' "$f"; then
       sed -i -E "s|^\s*#?\s*FallbackDNS=.*|FallbackDNS=${DNS_FALLBACK}|" "$f"
     else
@@ -762,17 +751,20 @@ function ensure_systemd_resolved_dns() {
     fi
 
     systemctl enable --now systemd-resolved >/dev/null 2>&1 || true
-    [[ -e /run/systemd/resolve/stub-resolv.conf ]] && ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-    [[ -e /run/systemd/resolve/resolv.conf ]]      && ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
     systemctl restart systemd-resolved >/dev/null 2>&1 || true
+
+    # Debian 常見 symlink
+    [[ -e /run/systemd/resolve/stub-resolv.conf ]] && ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf || true
+    [[ -e /run/systemd/resolve/resolv.conf ]]      && ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf || true
   else
     backup_file_ts /etc/resolv.conf || true
     {
-      echo "nameserver ${dns1}"
-      echo "nameserver 8.8.8.8"
+      echo "nameserver $(echo "$DNS_PRIMARY" | awk '{print $1}')"
+      echo "nameserver $(echo "$DNS_PRIMARY" | awk '{print $2}')"
     } > /etc/resolv.conf
   fi
 }
+
 function install_io_tune_boot_service() {
   cat > "$IO_TUNE_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
@@ -844,21 +836,23 @@ EOF
   systemctl daemon-reload >/dev/null 2>&1 || true
   systemctl enable --now elf-io-tune.service >/dev/null 2>&1 || true
 }
+
 function enable_fstrim_timer() {
   systemctl enable --now fstrim.timer >/dev/null 2>&1 || true
 }
+
 function disable_fixed_services_except_mysql() {
   for s in "${SERVICES_TO_DISABLE[@]}"; do
-    if systemctl list-unit-files "$s.service" >/dev/null 2>&1; then
-      systemctl disable --now "$s" >/dev/null 2>&1 || true
-    fi
+    systemctl disable --now "$s" >/dev/null 2>&1 || true
   done
 }
+
 function apply_persistent_tuning_all() {
   msg_info "開始套用：持久化性能調優（含 DNS + 固定停用服務/mysql除外）..."
 
+  # 必要套件：不吞錯（避免你以為有套上但其實沒裝到）
   apt-get update -qq
-  apt-get install -y cpufrequtils irqbalance >/dev/null 2>&1 || true
+  apt-get install -y cpufrequtils irqbalance
 
   set_cpu_governor_performance
   enable_irqbalance_service
@@ -868,10 +862,7 @@ function apply_persistent_tuning_all() {
     backup_file_ts "$GRUB_FILE"
     disable_thp_runtime_only
     grub_add_param_once "GRUB_CMDLINE_LINUX_DEFAULT" "transparent_hugepage=never"
-    if command -v update-grub >/dev/null 2>&1; then
-      update-grub >/dev/null 2>&1 || true
-    fi
-    msg_ok "✓ IPv6 功能已禁用（重啟後完全生效）"
+    command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1 || true
   else
     disable_thp_runtime_only
   fi
@@ -884,96 +875,69 @@ function apply_persistent_tuning_all() {
   msg_ok "✓ 持久化調優完成（建議重啟一次讓 GRUB/THP 完整生效）"
 }
 
-# ========== 主流程：每個功能都提供要/不要（且已設定則預設 NO） ==========
+# ========== 主流程 ==========
 echo
 
-# Docker
-already_docker=0
-if command -v docker &> /dev/null; then
-    already_docker=1
-fi
-if ask_run "Docker / Compose" "是否安裝 Docker Engine 與 Docker Compose？" "$already_docker"; then
+# Docker（你原本這裡硬寫 "0" 會讓預設永遠當未設定；保留但不影響 YES/NO 邏輯）
+if ask_run "Docker / Compose" "是否安裝 Docker Engine 與 Docker Compose？" "0"; then
   install_docker_stack
-else
-  msg_info "已跳過 Docker 安裝"
 fi
 
 # QEMU Guest Agent（偵測是否已啟用）
 if systemctl is-enabled qemu-guest-agent >/dev/null 2>&1; then
   if ask_run "QEMU Guest Agent" "qemu-guest-agent 已啟用。\n是否仍要重新確認/安裝？" "1"; then
     install_guest_agent
-  else
-    msg_info "已跳過 QEMU Guest Agent 安裝"
   fi
 else
   if ask_run "QEMU Guest Agent" "是否安裝並啟用 qemu-guest-agent？" "0"; then
     install_guest_agent
-  else
-    msg_info "已跳過 QEMU Guest Agent 安裝"
   fi
 fi
 
-# root 密碼（無可靠偵測，保留手動選）
-already_rootpw=0  # 無可靠檢測，固定為未設定
-if ask_run "ROOT 密碼" "是否設定 root 用戶新密碼？" "$already_rootpw"; then
+# root 密碼
+if whiptail --backtitle "ELF Debian13 ALL IN" --title "ROOT 密碼" --yesno "是否設定 root 用戶新密碼？" 10 60; then
   set_root_password
-else
-  msg_info "已跳過 root 密碼設定"
 fi
 
 # SSH（已設定則預設 NO）
 already_ssh=0; is_ssh_configured_root_pw_login && already_ssh=1
 if ask_run "SSH 服務" "是否安裝並啟用 SSH（允許 root 密碼登入）？" "$already_ssh"; then
   configure_ssh
-else
-  msg_info "已跳過 SSH 服務設定"
 fi
 
 # 固定 IP（已有靜態設定檔則預設 NO）
 already_ip=0; is_static_ip_configured_any && already_ip=1
 if ask_run "固定 IP / DNS" "是否要配置固定 IP（gateway/網段取當下）？" "$already_ip"; then
   configure_static_ip
-else
-  msg_info "已跳過固定 IP 設定"
 fi
 
 # 持久化性能調優（已套用則預設 NO）
-already_tuned=0; is_persistent_tuning_applied && already_tuned=1
-if ask_run "持久化性能調優" "是否要套用持久化性能調優（含 DNS + 固定停用服務/mysql除外）？" "$already_tuned"; then
+already_tune=0; is_persistent_tuning_applied && already_tune=1
+if ask_run "持久化性能調優" "是否套用「持久化性能調優 + DNS 優化 + 固定停用服務(mysql除外)」？\n\n停用：bluetooth / cups / apache2\n保留：mysql" "$already_tune"; then
   apply_persistent_tuning_all
-else
-  msg_info "已跳過持久化性能調優"
 fi
 
 # 大文件優化（已設定則預設 NO）
 already_lf=0; is_largefile_tuned && already_lf=1
 if ask_run "大文件優化" "是否要套用大文件處理優化？" "$already_lf"; then
   optimize_for_large_files
-else
-  msg_info "已跳過大文件優化"
 fi
 
-# 擴展硬碟（沒有空間也會自動略過）
+# 擴展硬碟
 if whiptail --backtitle "ELF Debian13 ALL IN" --title "磁碟擴展" --yesno "是否要擴展硬碟（含 LVM）？" 10 60; then
   expand_disk
-else
-  msg_info "已跳過硬碟擴展"
 fi
 
 # 網路傳輸優化（已設定檔則預設 NO）
 already_net=0; is_net_opt_tuned && already_net=1
 if ask_run "網路優化" "是否要套用網路傳輸優化（BBR/fq 等）？" "$already_net"; then
   optimize_network_stack
-else
-  msg_info "已跳過網路優化"
 fi
 
-# Log 清理排程（是否已有 cron 檔）
+# Log 清理排程
 already_log=0; [[ -f /etc/cron.d/elf-log-cleanup ]] && already_log=1
 if ask_run "Log 清理排程" "是否設定 log 定期清理排程？" "$already_log"; then
   schedule_log_cleanup
-else
-  msg_info "已跳過 log 清理排程"
 fi
 
 whiptail --backtitle "ELF Debian13 ALL IN" --title "完成" --msgbox \
