@@ -301,8 +301,10 @@ function prefix2netmask() {
 function configure_static_ip() {
   # 是否同時禁用 IPv6
   local already_ipv6=0
+  local disable_ipv6_selected=0
   is_ipv6_disabled && already_ipv6=1
   if ask_run "IPv6" "配置固定 IP 時是否同時禁用 IPv6？" "$already_ipv6"; then
+    disable_ipv6_selected=1
     disable_ipv6
   fi
 
@@ -393,6 +395,8 @@ EOF
       ;;
     NetworkManager)
       mkdir -p /etc/NetworkManager/system-connections
+      local ipv6_method="auto"
+      [[ "$disable_ipv6_selected" = "1" ]] && ipv6_method="ignore"
       cat > "/etc/NetworkManager/system-connections/${iface}.nmconnection" <<EOF
 [connection]
 id=$iface
@@ -405,7 +409,7 @@ address1=$target_ip/$prefix,$gateway
 dns=$dns;
 
 [ipv6]
-method=ignore
+method=$ipv6_method
 EOF
       chmod 600 "/etc/NetworkManager/system-connections/${iface}.nmconnection"
       nmcli connection reload
