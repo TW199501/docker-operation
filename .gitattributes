@@ -1,0 +1,43 @@
+# =============================================================================
+# 行尾規範 — 對齊團隊範本(E:\source\team-project-template\.gitattributes)
+#
+# 原則:
+#   1. 全域 LF(包含 Windows 開發者本機 checkout 時也轉成 LF)
+#   2. 只有 Windows 專屬批次檔(.bat / .cmd / .ps1)強制 CRLF
+#   3. 此檔的規範由 .github/scripts/check-line-endings.mjs 在 CI 強制
+# =============================================================================
+
+# 預設:所有 text 檔案以 LF 為行尾
+* text=auto eol=lf
+
+# 強制 LF (跨平台原始碼)
+*.sh         text eol=lf
+*.bash       text eol=lf
+*.mjs        text eol=lf
+*.js         text eol=lf
+*.ts         text eol=lf
+*.json       text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.md         text eol=lf
+*.conf       text eol=lf
+*.ini        text eol=lf
+*.env*       text eol=lf
+*.example    text eol=lf
+Dockerfile*  text eol=lf
+
+# Windows 專屬批次檔強制 CRLF
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+*.ps1        text eol=crlf
+
+# 二進位:不轉換、不 diff
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.ico        binary
+*.pdf        binary
+*.zip        binary
+*.tar.gz     binary
+*.gz         binary
