@@ -261,6 +261,20 @@ run_unit_tests() {
         fi
     done
 
+    # Bats 測試(env bootstrap 等)— 若本機未裝 bats 則 skip
+    if command -v bats >/dev/null 2>&1; then
+        if [ -d "$SCRIPT_DIR/env" ]; then
+            log_info "執行 Bats 測試: tests/env/"
+            if bats "$SCRIPT_DIR/env/"; then
+                ((passed++))
+            else
+                ((failed++))
+            fi
+        fi
+    else
+        log_warning "bats 未安裝,跳過 tests/env/ Bats 測試"
+    fi
+
     log_info "單元測試完成: $passed 通過, $failed 失敗"
     return $((failed > 0 ? 1 : 0))
 }
