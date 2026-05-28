@@ -1,0 +1,17 @@
+# =============================================================================
+# Issue 入口頁設定
+# TODO: 啟用前請替換以下兩項
+#   - 團隊頻道 URL(Slack / Discord / Teams)
+#   - 資安通報信箱
+# =============================================================================
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 團隊討論
+    url: https://YOUR-TEAM-CHANNEL-URL
+    about: 一般討論、設計問題、流程疑問請至團隊頻道
+  - name: 📖 開發規範
+    url: https://github.com/TW199501/docker-operation/blob/main/CLAUDE.md
+    about: 開發前請先閱讀 CLAUDE.md 與 docs/ 下的規範文件
+  - name: 🔒 資安通報
+    url: mailto:security@YOUR-DOMAIN
+    about: 涉及資安漏洞請勿開公開 Issue,請寄信至此信箱

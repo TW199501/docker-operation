@@ -1,0 +1,105 @@
+name: 🐛 Bug 回報
+description: 回報程式錯誤或非預期行為
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感謝你回報 Bug！為了盡快定位並修復問題，請完整填寫以下資訊。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🐛 問題描述
+      description: 清楚簡潔地描述發生了什麼問題
+      placeholder: 點選匯出按鈕後...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 🔁 重現步驟
+      description: 一步一步說明如何重現此問題
+      placeholder: |
+        1. 登入帳號 xxx
+        2. 進入「發票管理」頁面
+        3. 點選「批次匯出」
+        4. 出現錯誤訊息「...」
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: ✅ 預期行為
+      description: 你預期應該發生什麼？
+      placeholder: 應該下載 Excel 檔案
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: ❌ 實際行為
+      description: 實際發生了什麼？
+      placeholder: 顯示「Server Error 500」
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📸 截圖 / 錄影
+      description: 如可能請附上截圖或操作錄影（直接拖曳檔案到此區塊）
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 🖥️ 環境資訊
+      description: 發生問題的環境
+      value: |
+        - 環境：[ ] 生產 / [ ] 測試 / [ ] 本地
+        - Docker 版本：（docker --version）
+        - Docker Compose 版本：（docker compose version）
+        - 作業系統：（如 Debian 13 / Ubuntu 22.04 / Windows 11）
+        - 涉及的子專案目錄：（如 nginx1.29.3-docker / DB/SQLServer）
+        - 發生時間：YYYY-MM-DD HH:mm
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 錯誤訊息 / Log
+      description: 貼上錯誤訊息、Console log、Server log
+      render: shell
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 🚨 嚴重程度
+      options:
+        - 🔴 Critical（系統無法使用 / 資料遺失）
+        - 🟠 High（核心功能受影響 / 多人受影響）
+        - 🟡 Medium（部分功能異常 / 有 workaround）
+        - 🟢 Low（小問題 / 不影響主要流程）
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📎 其他資訊
+      description: 任何有助於釐清問題的補充資訊
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: ✅ 提交前確認
+      options:
+        - label: 我已搜尋過 [Issues](../issues) 確認此問題未被回報
+          required: true
+        - label: 我已提供完整的重現步驟
+          required: true
