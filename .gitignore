@@ -1,19 +1,20 @@
 # 版本管理
 /VERSION
 
-# 其他忽略規則Local .env files
+# ---------- 環境變數 / 機密(對齊團隊規範) ----------
+# 規範來源:team-project-template/.gitignore §28-35
 .env
+.env.local
+.env.*.local
 !.env.example
+*.pem
+*.key
+*.pfx
+secrets/
 
-# .continue/
+# AI 工具殘留(本 repo 用 Claude Code,其餘工具設定不進 git)
 .codebuddy
 
-# 日志目录
+# 日誌
 logs/
 *.log
-
-# 日志文件
-logs/*.log
-
-
-

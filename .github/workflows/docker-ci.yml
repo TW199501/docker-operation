@@ -85,6 +85,43 @@ jobs:
             echo "✅ 所有 compose 檔皆符合命名規範"
           fi
 
+      - name: Block .env and secret files (must not be committed)
+        # 規範來源:team-project-template/docs/rule/development-guidelines.md §九
+        # 規範:.env / *.pem / *.key / *.pfx 一律禁止進 Git;唯一例外是 .env.example
+        # 機密外洩 zero-tolerance,不設 continue-on-error
+        run: |
+          BAD=$(git ls-files \
+                | grep -E '(^|/)\.env($|\.)|\.pem$|\.key$|\.pfx$' \
+                | grep -vE '\.env\.example$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::偵測到禁止進 Git 的機密/環境檔:"
+            echo "$BAD" | while read -r f; do echo "::error::  $f"; done
+            echo "::error::"
+            echo "::error::處理方式:"
+            echo "::error::  1. git rm --cached <檔案>"
+            echo "::error::  2. 將檔案中的秘密 revoke + 重設(視為已洩漏)"
+            echo "::error::  3. .env 改放 .env.example 留範例,實際值由部署環境注入"
+            exit 1
+          fi
+          echo "✅ 無禁止檔案進 Git"
+
+      - name: Block secrets in newly added files (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # 只檢查本 PR 新增的檔案,避免歷史包袱誤殺
+          ADDED=$(git diff --name-only --diff-filter=A \
+                    "${{ github.event.pull_request.base.sha }}" \
+                    "${{ github.event.pull_request.head.sha }}" || true)
+          BAD=$(echo "$ADDED" \
+                | grep -E '(^|/)\.env($|\.)|\.pem$|\.key$|\.pfx$' \
+                | grep -vE '\.env\.example$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::本 PR 新增了禁止進 Git 的機密/環境檔:"
+            echo "$BAD" | while read -r f; do echo "::error::  $f"; done
+            exit 1
+          fi
+          echo "✅ 本 PR 未新增機密檔案"
+
   # ---------------------------------------------------------------------------
   # Dockerfile lint(Hadolint)
   # ---------------------------------------------------------------------------

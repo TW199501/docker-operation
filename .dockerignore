@@ -13,5 +13,15 @@ SECURITY.md
 .vscode/
 .idea/
 *.log
-.env*
+
+# ---------- 機密 / 環境(對齊團隊規範) ----------
+# 規範來源:team-project-template/.dockerignore §26-32
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+secrets/
+
 docker-compose.override.yml
