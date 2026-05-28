@@ -122,6 +122,15 @@ jobs:
           fi
           echo "✅ 本 PR 未新增機密檔案"
 
+      - name: Check .env.example syntax and whitelist
+        # 規範:docs/conventions/env-naming.md
+        # 強制執行(不設 continue-on-error):
+        # 1. $(...) 命令必須在 lib/whitelist.sh
+        # 2. heuristic 擋字面密碼(PASSWORD/SECRET/TOKEN/KEY 後接 8+ alphanum 且非 $())
+        run: |
+          chmod +x scripts/env/check-env-syntax.sh
+          bash scripts/env/check-env-syntax.sh
+
   # ---------------------------------------------------------------------------
   # Dockerfile lint(Hadolint)
   # ---------------------------------------------------------------------------
