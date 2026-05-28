@@ -1,5 +1,14 @@
 name: Docker Build & Test
 
+# =============================================================================
+# 對齊團隊範本(team-project-template/.github/workflows/ci.yml)
+# - concurrency 取消同分支舊 workflow
+# - 最小 permissions
+# - basics job:Conventional Commits / line-ending / 大檔偵測
+# - 移除與 security-scan.yml 重複的 Trivy job
+# - 移除與 script-test.yml 重複的 shellcheck job
+# =============================================================================
+
 on:
   push:
     branches: [ main, develop ]
@@ -16,135 +25,144 @@ on:
       - '**/docker-compose.yaml'
       - '**/*.sh'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
-  # Docker 鏡像檢查
+  # ---------------------------------------------------------------------------
+  # 基礎檢查:commit message / line endings / 大檔
+  # ---------------------------------------------------------------------------
+  basics:
+    name: Basics (commit / file check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages (Conventional Commits)
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        uses: webiny/action-conventional-commits@v1.3.0
+
+      - name: Setup Node.js (for check scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check line endings (LF enforcement)
+        run: node .github/scripts/check-line-endings.mjs
+
+      - name: Check for large files (> 5MB)
+        run: |
+          LARGE_FILES=$(find . -type f -size +5M -not -path "./.git/*" || true)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "發現大檔案(>5MB),請考慮使用 Git LFS:"
+            echo "$LARGE_FILES"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Dockerfile lint(Hadolint)
+  # ---------------------------------------------------------------------------
   docker-lint:
+    name: Dockerfile lint (Hadolint)
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Find Dockerfiles
-      id: dockerfiles
-      run: |
-        echo "dockerfiles=$(find . -name "Dockerfile" -type f | tr '\n' ' ')" >> $GITHUB_OUTPUT
+      - name: Find Dockerfiles
+        id: dockerfiles
+        run: |
+          echo "dockerfiles=$(find . -name "Dockerfile" -type f | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
-    - name: Run Docker lint
-      if: steps.dockerfiles.outputs.dockerfiles != ''
-      uses: hadolint/hadolint-action@v3.3.0
-      with:
-        dockerfile: ${{ matrix.dockerfile }}
-        config: .hadolint.yaml
-      continue-on-error: true
+      - name: Run Docker lint
+        if: steps.dockerfiles.outputs.dockerfiles != ''
+        uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: ${{ matrix.dockerfile }}
+          config: .hadolint.yaml
+        continue-on-error: true
 
-  # Shell 腳本測試
-  shell-test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Install shellcheck
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y shellcheck
-
-    - name: Test shell scripts
-      run: |
-        find . -name "*.sh" -type f -exec shellcheck {} \; || true
-
-    - name: Test script syntax
-      run: |
-        find . -name "*.sh" -type f -exec bash -n {} \;
-
-  # Docker Compose 驗證
+  # ---------------------------------------------------------------------------
+  # Docker Compose 語法驗證
+  # ---------------------------------------------------------------------------
   docker-compose-validate:
+    name: docker-compose config validate
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Docker Compose
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker-compose
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
 
-    - name: Validate docker-compose files
-      run: |
-        find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | while read -r file; do
-          echo "Validating $file"
-          docker-compose -f "$file" config --quiet || echo "Warning: $file has issues"
-        done
+      - name: Validate docker-compose files
+        run: |
+          find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | while read -r file; do
+            echo "Validating $file"
+            docker-compose -f "$file" config --quiet || echo "Warning: $file has issues"
+          done
 
+  # ---------------------------------------------------------------------------
   # 構建測試
+  # ---------------------------------------------------------------------------
   build-test:
+    name: Build test
     runs-on: ubuntu-latest
     if: contains(github.event.head_commit.modified, 'Dockerfile') || contains(github.event.head_commit.modified, 'docker-compose')
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Find Docker Compose files
-      run: |
-        echo "Found docker-compose files:"
-        find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | head -5
+      - name: Find Docker Compose files
+        run: |
+          echo "Found docker-compose files:"
+          find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | head -5
 
-    - name: Test docker-compose config
-      run: |
-        # 測試一些主要的 docker-compose 文件
-        for file in $(find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | head -3); do
-          echo "Testing $file..."
-          docker-compose -f "$file" config --quiet && echo "✅ $file is valid" || echo "❌ $file has issues"
-        done
+      - name: Test docker-compose config
+        run: |
+          for file in $(find . -name "docker-compose*.yml" -o -name "docker-compose*.yaml" | head -3); do
+            echo "Testing $file..."
+            docker-compose -f "$file" config --quiet && echo "✅ $file is valid" || echo "❌ $file has issues"
+          done
 
-    - name: Check for any Dockerfiles
-      run: |
-        if [ -f "Dockerfile" ]; then
-          echo "Found Dockerfile in root directory"
-          docker build --no-cache -t test-image .
-          echo "✅ Dockerfile build successful"
-        else
-          echo "No Dockerfile found in root directory, skipping build test"
-        fi
-
-  # 安全掃描
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v4
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
-
-  # 版本檢查
-  version-check:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Check version consistency
-      run: |
-        if [ -f "Dockerfile/VERSION" ]; then
-          VERSION=$(cat Dockerfile/VERSION)
-          echo "Current version: $VERSION"
-
-          # 檢查是否在 README 或其他文件中提到版本
-          if grep -q "$VERSION" README.md; then
-            echo "Version found in README.md"
+      - name: Check for any Dockerfiles
+        run: |
+          if [ -f "Dockerfile" ]; then
+            echo "Found Dockerfile in root directory"
+            docker build --no-cache -t test-image .
+            echo "✅ Dockerfile build successful"
           else
-            echo "Warning: Version not found in README.md"
+            echo "No Dockerfile found in root directory, skipping build test"
           fi
-        fi
+
+  # ---------------------------------------------------------------------------
+  # 版本一致性
+  # ---------------------------------------------------------------------------
+  version-check:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check version consistency
+        run: |
+          if [ -f "Dockerfile/VERSION" ]; then
+            VERSION=$(cat Dockerfile/VERSION)
+            echo "Current version: $VERSION"
+            if grep -q "$VERSION" README.md; then
+              echo "Version found in README.md"
+            else
+              echo "Warning: Version not found in README.md"
+            fi
+          fi
