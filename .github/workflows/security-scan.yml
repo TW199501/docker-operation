@@ -102,6 +102,8 @@ jobs:
           fi
 
   codeql-analysis:
+    # 本 repo 是 Docker mono-repo,無 JS/TS 程式碼;Python 只有 2 個小工具檔
+    # 用 CodeQL v4 新支援的 'actions' 語言掃 GitHub Actions workflows 本身的安全(pwn request、untrusted ref 等)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -110,13 +112,12 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: javascript, python
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+          languages: actions
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:actions"
 
   docker-security:
     runs-on: ubuntu-latest
