@@ -1,0 +1,24 @@
+# =============================================================================
+# .env.example template
+# 對應 stack:<stack-name>
+# 規範:docs/conventions/env-naming.md
+# 用法:./scripts/env/bootstrap-env.sh <this-directory>
+# =============================================================================
+
+# === 基本設定 ===
+TZ=Asia/Taipei
+APP_NAME="My Stack"
+
+# === Database ===
+POSTGRES_DB=myapp                              # DB 名稱
+POSTGRES_USER=postgres                         # DB 使用者
+POSTGRES_PASSWORD=$(openssl rand -base64 32)   # 自動生成
+
+# === Admin ===
+ADMIN_EMAIL=                                   # 必填(bootstrap 詢問)
+ADMIN_PASSWORD=$(openssl rand -base64 24)
+JWT_SECRET=$(openssl rand -hex 64)
+
+# === Networking ===
+DOMAIN=                                        # 必填
+HOST_NAME=$(hostname)

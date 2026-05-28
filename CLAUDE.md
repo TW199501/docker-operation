@@ -104,6 +104,21 @@ Note: there are also `.github-*.yml` files at the repo **root** (e.g. `.github-d
 **動本目錄的 compose 檔時**:先 `grep -rn <檔名> .` 確認 reference;改名須同步更新所有 caller(docs / shell scripts / CI workflows)。
 **新增 compose 檔時**:遵循上述規則,違反會被 CI advisory 警告(目前 warn-only;待現存 6 個違規檔處理完後轉強制)。
 
+## .env 命名規範
+
+**完整規範:** [`docs/conventions/env-naming.md`](docs/conventions/env-naming.md)
+
+**核心模型:** `.env.example`(進 git)→ `scripts/env/bootstrap-env.sh` → `.env`(不進 git)→ docker-compose
+
+**5 條語法:**
+- 字面值:`TZ=Asia/Taipei`
+- 自動生成:`PASSWORD=$(openssl rand -base64 32)` — 命令必須在白名單內
+- 必填空值:`ADMIN_EMAIL=` — bootstrap 互動 prompt
+- 含空格必引號:`APP_NAME="My App"`
+- 註解用 `#`(**禁** `//` C-style — bash source 會把後段當值)
+
+**Bootstrap 一行起新環境:** `./scripts/env/bootstrap-env.sh DB/POSTGRES`
+
 ## House rules carried over from `.windsurf/rules/ai-commitment-statement.md`
 
 These were authored as project-wide guidance for AI assistants and apply here too:
