@@ -12,12 +12,19 @@ on:
       - 'proxmox-k8s/**'
       - 'tests/test_k8s_scripts.sh'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   shell-lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install shellcheck
         run: |
@@ -44,7 +51,7 @@ jobs:
     needs: shell-lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Run K8s script smoke tests
         run: |
