@@ -1,5 +1,13 @@
 name: Docker Publish
 
+# =============================================================================
+# 對齊團隊規範:
+# - 最小 permissions(top-level contents:read,publish job 局部放寬寫入)
+# - concurrency 防止重複 tag push 並行(但不取消進行中的推送)
+# - 修補 attest-build-provenance 引用 steps.push.outputs.digest 但缺 id 的 bug
+# - actions/checkout 從 @v6 改 @v4(@v6 不存在,@v4 為 stable)
+# =============================================================================
+
 on:
   push:
     tags:
@@ -7,12 +15,26 @@ on:
   release:
     types: [published]
 
+# Tag 推送的 release 不能被中斷:被中斷會導致「tag 已建但 image 沒推」
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# 預設最小化;publish job 局部覆寫寫入權限
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # 推 image(若改用 GHCR)
+      id-token: write          # attest-build-provenance 需要
+      attestations: write      # attest-build-provenance 需要
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -38,10 +60,11 @@ jobs:
           type=sha,prefix={{branch}}-
 
     - name: Build and push base image
+      id: push                          # ← 新增:供下游 attestation 步驟引用 digest
       uses: docker/build-push-action@v6
       with:
         context: .
-        file: ./Dockerfile  # 如果根目錄有 Dockerfile
+        file: ./Dockerfile              # NOTE: 本 repo 根目錄目前無 Dockerfile,workflow 僅在 v* tag 觸發時實際嘗試 build
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.meta.outputs.tags }}
