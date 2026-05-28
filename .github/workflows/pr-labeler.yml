@@ -1,0 +1,44 @@
+name: PR Labeler
+
+# =============================================================================
+# 依 PR 變動的檔案路徑自動加標籤
+# 標籤規則定義於 .github/labeler.yml
+# =============================================================================
+#
+# ⚠️ 安全注意（請務必閱讀）⚠️
+# -----------------------------------------------------------------------------
+# 本 workflow 使用 `pull_request_target`，這代表它以 base repo（你的 repo）的
+# 權限執行，且 `secrets.GITHUB_TOKEN` 對 fork PR 也有寫入權。這是 GitHub 經典的
+# "pwn request" 攻擊面：
+#
+#   ❌ 嚴禁在此 workflow 中加入 `actions/checkout` 取出 PR 程式碼後執行任何
+#      build/test/script，因為攻擊者可在 fork 中放入惡意程式碼，憑著 base repo
+#      的權限執行任意動作。
+#
+#   ✅ 若必須 checkout PR 程式碼，務必指定 `ref: ${{ github.event.pull_request.head.sha }}`
+#      並避免在該 checkout 範圍內執行任何使用者程式碼。
+#
+#   ✅ 本 workflow 目前僅呼叫 actions/labeler，不 checkout 程式碼，是安全的。
+#      未來修改時請維持此原則。
+#
+# 詳見：https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
+# =============================================================================
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Apply labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply labels
+        uses: actions/labeler@v6
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: true

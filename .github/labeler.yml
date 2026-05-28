@@ -1,0 +1,77 @@
+# =============================================================================
+# PR 自動標籤規則 (docker-operation 客製版)
+# 使用 actions/labeler@v6 格式
+# 文件: https://github.com/actions/labeler
+#
+# 設計原則:本 repo 是 Docker mono-repo,label 按「子目錄/基建類型」分類,
+#         而非按「技術棧」分類(對比團隊範本的 frontend/backend/flutter)。
+# =============================================================================
+
+docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/Dockerfile'
+          - '**/Dockerfile.*'
+          - '**/docker-compose*.yml'
+          - '**/docker-compose*.yaml'
+          - '.dockerignore'
+          - '.hadolint.yaml'
+
+scripts:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.sh'
+          - '**/*.bash'
+          - '**/*.bat'
+          - '**/*.cmd'
+          - '**/*.ps1'
+
+nginx:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'nginx/**'
+          - 'nginx1.29.3-docker/**'
+
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'DB/**'
+          - '**/*.sql'
+          - '**/migrations/**'
+
+proxmox:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'proxmox9.0/**'
+          - 'proxmox-k8s/**'
+
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'tests/**'
+          - 'Dockerfile/bump-version.*'
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**'
+          - 'README*'
+          - 'LICENSE'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
+          - 'requirements*.txt'
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.editorconfig'
+          - '.gitignore'
+          - '.gitattributes'
+          - '.shellcheckrc'
+          - '.prettierrc*'
