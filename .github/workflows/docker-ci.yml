@@ -67,6 +67,24 @@ jobs:
             exit 1
           fi
 
+      - name: Check docker-compose file naming convention (advisory)
+        # 規範來源:docs/conventions/compose-naming.md
+        # 目前 warn-only(continue-on-error: true),待 6 個違規檔處理完後轉強制
+        continue-on-error: true
+        run: |
+          BAD=$(find . -type f \
+                  \( -name "compose-*.yml" -o -name "compose-*.yaml" \
+                     -o -name "*-compose.yml" -o -name "*-compose.yaml" \
+                     -o -name "docker-compose-*.yml" -o -name "docker-compose-*.yaml" \) \
+                  -not -path "./.git/*" || true)
+          if [ -n "$BAD" ]; then
+            echo "::warning::以下 compose 檔不符合團隊命名規範(見 docs/conventions/compose-naming.md):"
+            echo "$BAD" | while read -r f; do echo "::warning::  $f"; done
+            echo "::warning::規範:docker-compose.<env>.yml 或 docker-compose.<purpose>.yml(點分隔,不用 dash)"
+          else
+            echo "✅ 所有 compose 檔皆符合命名規範"
+          fi
+
   # ---------------------------------------------------------------------------
   # Dockerfile lint(Hadolint)
   # ---------------------------------------------------------------------------

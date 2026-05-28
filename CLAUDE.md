@@ -93,6 +93,17 @@ Note: there are also `.github-*.yml` files at the repo **root** (e.g. `.github-d
 - `DB/` groups database stacks (`POSTGRES/`, `SQLServer/`, `mariadb/`, `redis/`, `Qdrant/`, `sql2022/`, `dbtools/`). Backups: see e.g. `DB/POSTGRES/pg-backup.sh`.
 - `certbot/bootstrap-certificates.sh` issues certs via the Cloudflare DNS-01 plugin; it expects `certbot/cloudflare.ini` (see `cloudflare.ini.example`).
 
+## Compose 檔命名規範
+
+**規則(完整版見 [`docs/conventions/compose-naming.md`](docs/conventions/compose-naming.md)):**
+- 子目錄名表達專案 → compose 檔名**不重複**專案名。
+- 預設:`docker-compose.yml`。
+- 變體:**點分隔** — `docker-compose.<env>.yml`(`dev / test / staging / prod`)或 `docker-compose.<purpose>.yml`(`build / backup / ui`)。
+- 禁止:`compose-X.yml` / `X-compose.yml` / `docker-compose-X.yml`(dash 而非 dot)。
+
+**動本目錄的 compose 檔時**:先 `grep -rn <檔名> .` 確認 reference;改名須同步更新所有 caller(docs / shell scripts / CI workflows)。
+**新增 compose 檔時**:遵循上述規則,違反會被 CI advisory 警告(目前 warn-only;待現存 6 個違規檔處理完後轉強制)。
+
 ## House rules carried over from `.windsurf/rules/ai-commitment-statement.md`
 
 These were authored as project-wide guidance for AI assistants and apply here too:
