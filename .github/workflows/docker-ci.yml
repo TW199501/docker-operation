@@ -131,6 +131,15 @@ jobs:
           chmod +x scripts/env/check-env-syntax.sh
           bash scripts/env/check-env-syntax.sh
 
+      - name: Check .env.example covers compose variables (advisory)
+        # 對每個 docker-compose*.yml,驗證 ${VAR} 都在同目錄 .env.example 有定義
+        # advisory(continue-on-error: true),只 warn 不擋
+        # 待現存缺口處理完後可轉強制(移除 continue-on-error 即可)
+        continue-on-error: true
+        run: |
+          chmod +x scripts/env/check-env-coverage.sh
+          bash scripts/env/check-env-coverage.sh
+
   # ---------------------------------------------------------------------------
   # Dockerfile lint(Hadolint)
   # ---------------------------------------------------------------------------
