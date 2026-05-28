@@ -1,19 +1,105 @@
+# =============================================================================
+# Dependabot 設定 — 相依套件更新 PR
+# 對齊團隊範本格式(timezone / labels / limits / commit-message scope)
+#
+# 文件: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# 規範來源: team-project-template/.github/dependabot.yml
+#
+# 本 repo 無根目錄 Dockerfile(Dockerfile/ 是版本管理子目錄,非 Docker 檔)
+# 因此 docker ecosystem 不掛在 directory: /,改為逐一指定子目錄。
+# =============================================================================
+
 version: 2
 updates:
-  # GitHub Actions 更新
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # ---------------------------------------------------------------------------
+  # GitHub Actions 套件更新
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci/cd
     commit-message:
-      prefix: "ci"
-      include: "scope"
+      prefix: chore(ci)
+      include: scope
 
-  # Docker 依賴更新 - 根目錄
-  - package-ecosystem: "docker"
-    directory: "/"
+  # ---------------------------------------------------------------------------
+  # codeserver Dockerfile
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directory: /codeserver
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
     commit-message:
-      prefix: "docker"
-      include: "scope"
+      prefix: chore(docker)
+      include: scope
+
+  # ---------------------------------------------------------------------------
+  # nginx1.29.3-docker 主 Dockerfile
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directory: /nginx1.29.3-docker
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
+      - nginx
+    commit-message:
+      prefix: chore(docker)
+      include: scope
+
+  # ---------------------------------------------------------------------------
+  # nginx1.29.3-docker/haproxy
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directory: /nginx1.29.3-docker/haproxy
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - docker
+      - nginx
+    commit-message:
+      prefix: chore(docker)
+      include: scope
+
+  # ---------------------------------------------------------------------------
+  # nginx1.29.3-docker/haproxy/alpine
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directory: /nginx1.29.3-docker/haproxy/alpine
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - docker
+      - nginx
+    commit-message:
+      prefix: chore(docker)
+      include: scope
