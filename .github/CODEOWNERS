@@ -1,0 +1,48 @@
+# =============================================================================
+# CODEOWNERS — PR 修改對應路徑時自動指派 reviewer
+# 文件: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+#
+# 注意:
+# 1. Pattern matching 採 last match wins(跟 .gitignore 相反)
+# 2. 要讓「CODEOWNERS 必審」實際生效,需在 GitHub repo settings →
+#    Branches → branch protection rule 勾選 "Require review from Code Owners"
+#
+# TODO: 將下方 @TW199501 替換為實際維護者帳號或團隊 group(如 @org/team-name)
+# =============================================================================
+
+# 預設擁有者:所有檔案
+*                           @TW199501
+
+# =====================================================
+# CI/CD 與規範文件:須由維護者 approve
+# =====================================================
+/.github/                   @TW199501
+/docs/                      @TW199501
+/CLAUDE.md                  @TW199501
+/LICENSE                    @TW199501
+/SECURITY.md                @TW199501
+
+# =====================================================
+# Docker 核心檔(Dockerfile / compose)
+# =====================================================
+**/Dockerfile               @TW199501
+**/Dockerfile.*             @TW199501
+**/docker-compose*.yml      @TW199501
+**/docker-compose*.yaml     @TW199501
+/.dockerignore              @TW199501
+/.hadolint.yaml             @TW199501
+
+# =====================================================
+# 版本管理(此目錄由 bump-version.sh 統一控管,需謹慎)
+# =====================================================
+/Dockerfile/                @TW199501
+
+# =====================================================
+# 關鍵基建子目錄
+# =====================================================
+/nginx/                     @TW199501
+/nginx1.29.3-docker/        @TW199501
+/DB/                        @TW199501
+/proxmox9.0/                @TW199501
+/proxmox-k8s/               @TW199501
+/certbot/                   @TW199501
